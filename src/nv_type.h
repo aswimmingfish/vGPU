@@ -15,6 +15,7 @@
 #include "dri.h"
 #include <stdint.h>
 #include "nouveau_drm.h"
+#include "nv_xf86Crtc.h"
 #else
 #error "This driver requires a DRI-enabled X server"
 #endif
@@ -123,8 +124,31 @@ typedef struct {
 	void *map;
 } NVAllocRec;
 
+typedef struct _NVCrtcPrivateRec {
+	int crtc;
+} NVCrtcPrivateRec, *NVCrtcPrivatePtr;
+
+#define NVCrtcPrivate(c) ((NVCrtcPrivatePtr)(c)->driver_private)
+
+typedef struct _NVOutputPrivateRec {
+	int type;
+} NVOutputPrivateRec, *NVOutputPrivatePtr;
+
+#define NVOutputPrivate(o) ((NVOutputPrivatePtr (o)->driver_private)
+
+typedef struct _NVOutputRec {
+	Bool enabled;
+	DisplayModeRec curMode;
+	DisplayModeRec desiredMode;
+#ifdef RANDR_12_INTERFACE
+	RRCrtcPtr randr_crtc;
+#endif
+} NVPipeRec, *NVPipePtr;
+
 typedef struct _NVRec *NVPtr;
 typedef struct _NVRec {
+    xf86CrtcConfigRec xf86_config;
+
     RIVA_HW_STATE       SavedReg;
     RIVA_HW_STATE       ModeReg;
     RIVA_HW_STATE       *CurrentState;
