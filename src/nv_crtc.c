@@ -292,11 +292,11 @@ void nv_crtc_calc_state_ext(
                                         &(state->arbitration0),
                                         &(state->arbitration1),
                                          pNv);
-            state->cursor0  = 0x00;
-            state->cursor1  = 0xbC;
+            regp->CRTC[NV_VGA_CRTCX_CURCTL0] = 0x00;
+            regp->CRTC[NV_VGA_CRTCX_CURCTL1] = 0xbC;
 	    if (flags & V_DBLSCAN)
-		state->cursor1 |= 2;
-            state->cursor2  = 0x00000000;
+		regp->CRTC[NV_VGA_CRTCX_CURCTL1] |= 2;
+            regp->CRTC[NV_VGA_CRTCX_CURCTL2] = 0x00000000;
             state->pllsel   = 0x10000700;
             state->config   = 0x00001114;
             state->general  = bpp == 16 ? 0x00101100 : 0x00100100;
@@ -779,8 +779,8 @@ static void
 nv_crtc_mode_set(xf86CrtcPtr crtc, DisplayModePtr mode,
 		 DisplayModePtr adjusted_mode)
 {
-    nv_crtc_mode_set_vga(crtc, mode);
     nv_crtc_mode_set_regs(crtc, mode);
+    nv_crtc_mode_set_vga(crtc, mode);
 
     nv_crtc_load_state(crtc);
     nv_crtc_load_vga_state(crtc);
@@ -874,288 +874,8 @@ void nv_crtc_load_state(xf86CrtcPtr crtc)
     nvWriteTIMER(pNv, 0x0140, 0x00000000);
     nvWriteTIMER(pNv, 0x0100, 0xFFFFFFFF);
 
-    /* begin surfaces */
-    /* it seems those regions are equivalent to the radeon's SURFACEs. needs to go in-kernel just like the SURFACEs */
-    if(pNv->Architecture == NV_ARCH_04) {
-        nvWriteFB(pNv, NV_PFB_CFG0, state->config);
-    } else 
-    if((pNv->Architecture < NV_ARCH_40) ||
-       ((pNv->Chipset & 0xfff0) == CHIPSET_NV40))
-    {
-        for(i = 0; i < 8; i++) {
-           nvWriteFB(pNv, (NV_PFB_TILE_NV10 + (i * 0x10)), 0);
-           nvWriteFB(pNv, (NV_PFB_TILE_SIZE_NV10 + (i * 0x10)), pNv->VRAMPhysicalSize - 1);
-        }
-    } else {
-        int regions = 12;
-
-        if(((pNv->Chipset & 0xfff0) == CHIPSET_G70) ||
-           ((pNv->Chipset & 0xfff0) == CHIPSET_G71) ||
-           ((pNv->Chipset & 0xfff0) == CHIPSET_G72) ||
-           ((pNv->Chipset & 0xfff0) == CHIPSET_G73) ||
-           ((pNv->Chipset & 0xfff0) == CHIPSET_C512))
-        {
-           regions = 15;
-        }
- 
-       for(i = 0; i < regions; i++) {
-          nvWriteFB(pNv, (NV_PFB_TILE_NV40 + (i * 0x10)), 0);
-          nvWriteFB(pNv, (NV_PFB_TILE_SIZE_NV40 + (i * 0x10)), pNv->VRAMPhysicalSize - 1);
-       }
-    }
-    /* end of surfaces */
-
-    if(pNv->Architecture < NV_ARCH_10) {
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_0, 0x000001FF);
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_0, 0x1230C000);
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_1, 0x72111101);
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_2_NV04, 0x11D5F071);
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_3, 0x0004FF31);
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_3, 0x4004FF31);
-
-       if (!pNv->IRQ) {
-	   nvWriteGRAPH(pNv, NV_PGRAPH_INTR_EN, 0x0);
-	   nvWriteGRAPH(pNv, NV_PGRAPH_INTR, 0xFFFFFFFF);
-       }
-       nvWriteGRAPH(pNv, NV_PGRAPH_CTX_CONTROL_NV04, 0x10010100);
-       nvWriteGRAPH(pNv, NV_PGRAPH_SURFACE, 0xFFFFFFFF);
-       nvWriteGRAPH(pNv, NV_PGRAPH_FIFO, 0x00000001);
-
-       nvWriteGRAPH(pNv, NV_PGRAPH_PATTERN_SHAPE, 0x00000000);
-       nvWriteGRAPH(pNv, NV_PGRAPH_BETA_AND, 0xFFFFFFFF);
-    } else {
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_0, 0xFFFFFFFF);
-       nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_0, 0x00000000);
-
-       if (!pNv->IRQ) {
-	   nvWriteGRAPH(pNv, NV_PGRAPH_INTR_EN, 0x0);
-	   nvWriteGRAPH(pNv, NV_PGRAPH_INTR, 0xFFFFFFFF);
-       }
-       nvWriteGRAPH(pNv, NV_PGRAPH_CTX_CONTROL, 0x10010100);
-       nvWriteGRAPH(pNv, NV_PGRAPH_STATE, 0xFFFFFFFF);
-       nvWriteGRAPH(pNv, NV_PGRAPH_FIFO, 0x00000001);
-       temp = nvReadGRAPH(pNv, NV_PGRAPH_SURFACE);
-       nvWriteGRAPH(pNv, NV_PGRAPH_SURFACE, temp & 0x0007ff00);
-       temp = nvReadGRAPH(pNv, NV_PGRAPH_SURFACE);
-       nvWriteGRAPH(pNv, NV_PGRAPH_SURFACE, temp | 0x00020100);
-
-       if(pNv->Architecture == NV_ARCH_10) {
-           nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_1, 0x00118700);
-           nvWriteGRAPH(pNv, 0x0088, 0x24E00810);
-           nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_3, 0x55DE0030);
-
-           /* nv10 second surfaces */
-           /* this is a copy of the surfaces. What is it for ? */
-           for(i = 0; i < 32; i++)
-             nvWriteGRAPH(pNv, NV_PGRAPH_TILE + (i*4), nvReadFB(pNv, NV_PFB_TILE_NV10 + (i*4)));
-           /* end of nv10 second surfaces */
-
-           nvWriteGRAPH(pNv, NV_PGRAPH_BOFFSET0, 0);
-           nvWriteGRAPH(pNv, NV_PGRAPH_BOFFSET1, 0);
-	   nvWriteGRAPH(pNv, NV_PGRAPH_BLIMIT0, pNv->VRAMPhysicalSize - 1);
-           nvWriteGRAPH(pNv, NV_PGRAPH_BLIMIT1, pNv->VRAMPhysicalSize - 1);
-
-           nvWriteGRAPH(pNv, NV_PGRAPH_PATTERN_SHAPE, 0x00000000);
-           nvWriteGRAPH(pNv, NV_PGRAPH_BETA_AND, 0xFFFFFFFF);
-       } else {
-           if(pNv->Architecture >= NV_ARCH_40) {
-              nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_1, 0x401287c0);
-              nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_3, 0x60de8051);
-              nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_4, 0x00008000);
-              nvWriteGRAPH(pNv, NV_PGRAPH_LIMIT_VIOL_PIX, 0x00be3c5f);
-
-              j = pNv->REGS[0x1540/4] & 0xff;
-              if(j) {
-                  for(i = 0; !(j & 1); j >>= 1, i++);
-                  nvWriteGRAPH(pNv, 0x5000, i);
-              }
-
-              if((pNv->Chipset & 0xfff0) == CHIPSET_NV40) {
-                 nvWriteGRAPH(pNv, 0x09b0, 0x83280fff);
-                 nvWriteGRAPH(pNv, 0x09b4, 0x000000a0);
-              } else {
-                 nvWriteGRAPH(pNv, 0x0820, 0x83280eff);
-                 nvWriteGRAPH(pNv, 0x0824, 0x000000a0);
-              }
-
-              switch(pNv->Chipset & 0xfff0) {
-              case CHIPSET_NV40:
-              case CHIPSET_NV45:
-                 nvWriteGRAPH(pNv, 0x09b8, 0x0078e366);
-                 nvWriteGRAPH(pNv, 0x09bc, 0x0000014c);
-		 temp = nvReadFB(pNv, NV_PFB_CLOSE_PAGE2);
-		 nvWriteFB(pNv, NV_PFB_CLOSE_PAGE2, temp & 0xffff7fff);
-                 break;
-              case CHIPSET_NV41:
-              case 0x0120:
-                 nvWriteGRAPH(pNv, 0x0828, 0x007596ff);
-                 nvWriteGRAPH(pNv, 0x082C, 0x00000108);
-                 break;
-              case CHIPSET_NV44:
-              case CHIPSET_G72:
-              case CHIPSET_C51:
-              case CHIPSET_C512:
-                 nvWriteMC(pNv, 0x1700, nvReadFB(pNv, NV_PFB_020C));
-                 nvWriteMC(pNv, 0x1704, 0);
-                 nvWriteMC(pNv, 0x1708, 0);
-                 nvWriteMC(pNv, 0x170C, nvReadFB(pNv, NV_PFB_020C));
-                 nvWriteGRAPH(pNv, 0x0860, 0);
-                 nvWriteGRAPH(pNv, 0x0864, 0);
-                 temp = nvReadCurRAMDAC(pNv, NV_RAMDAC_TEST_CONTROL);
-                 nvWriteCurRAMDAC(pNv, NV_RAMDAC_TEST_CONTROL, temp | 0x00100000);
-                 break;
-              case CHIPSET_NV43:
-                 nvWriteGRAPH(pNv, 0x0828, 0x0072cb77);
-                 nvWriteGRAPH(pNv, 0x082C, 0x00000108);
-                 break;
-              case CHIPSET_NV44A:
-                 nvWriteGRAPH(pNv, 0x0860, 0);
-                 nvWriteGRAPH(pNv, 0x0864, 0);
-                 temp = nvReadCurRAMDAC(pNv, NV_RAMDAC_TEST_CONTROL);
-                 nvWriteCurRAMDAC(pNv, NV_RAMDAC_TEST_CONTROL, temp | 0x00100000);
-                 break;
-              case CHIPSET_G70:
-              case CHIPSET_G71:
-              case CHIPSET_G73:
-                 temp = nvReadCurRAMDAC(pNv, NV_RAMDAC_TEST_CONTROL);
-                 nvWriteCurRAMDAC(pNv, NV_RAMDAC_TEST_CONTROL, temp | 0x00100000);
-                 nvWriteGRAPH(pNv, 0x0828, 0x07830610);
-                 nvWriteGRAPH(pNv, 0x082C, 0x0000016A);
-                 break;
-              default:
-                 break;
-              };
-
-              nvWriteGRAPH(pNv, 0x0b38, 0x2ffff800);
-              nvWriteGRAPH(pNv, 0x0b3c, 0x00006000);
-              nvWriteGRAPH(pNv, 0x032C, 0x01000000); 
-           } else
-           if(pNv->Architecture == NV_ARCH_30) {
-              nvWriteGRAPH(pNv, 0x0084, 0x40108700);
-              nvWriteGRAPH(pNv, 0x0890, 0x00140000);
-              nvWriteGRAPH(pNv, 0x008C, 0xf00e0431);
-              nvWriteGRAPH(pNv, 0x0090, 0x00008000);
-              nvWriteGRAPH(pNv, 0x0610, 0xf04b1f36);
-              nvWriteGRAPH(pNv, 0x0B80, 0x1002d888);
-              nvWriteGRAPH(pNv, 0x0B88, 0x62ff007f);
-           } else {
-              nvWriteGRAPH(pNv, 0x0084, 0x00118700);
-              nvWriteGRAPH(pNv, 0x008C, 0xF20E0431);
-              nvWriteGRAPH(pNv, 0x0090, 0x00000000);
-              nvWriteGRAPH(pNv, 0x009C, 0x00000040);
-
-              if((pNv->Chipset & 0x0ff0) >= CHIPSET_NV25) {
-                 nvWriteGRAPH(pNv, 0x0890, 0x00080000);
-                 nvWriteGRAPH(pNv, 0x0610, 0x304B1FB6); 
-                 nvWriteGRAPH(pNv, 0x0B80, 0x18B82880); 
-                 nvWriteGRAPH(pNv, 0x0B84, 0x44000000); 
-                 nvWriteGRAPH(pNv, 0x0098, 0x40000080); 
-                 nvWriteGRAPH(pNv, 0x0B88, 0x000000ff); 
-              } else {
-                 nvWriteGRAPH(pNv, 0x0880, 0x00080000);
-                 nvWriteGRAPH(pNv, 0x0094, 0x00000005);
-                 nvWriteGRAPH(pNv, 0x0B80, 0x45CAA208); 
-                 nvWriteGRAPH(pNv, 0x0B84, 0x24000000);
-                 nvWriteGRAPH(pNv, 0x0098, 0x00000040);
-                 nvWriteGRAPH(pNv, 0x0750, 0x00E00038);
-                 nvWriteGRAPH(pNv, 0x0754, 0x00000030);
-                 nvWriteGRAPH(pNv, 0x0750, 0x00E10038);
-                 nvWriteGRAPH(pNv, 0x0754, 0x00000030);
-              }
-           }
-
-           /* begin nv20+ secondr surfaces */
-           /* again, a copy of the surfaces. */
-           if((pNv->Architecture < NV_ARCH_40) ||
-              ((pNv->Chipset & 0xfff0) == CHIPSET_NV40)) 
-           {
-              for(i = 0; i < 32; i++) {
-                nvWriteGRAPH(pNv, 0x0900 + i*4, nvReadFB(pNv, NV_PFB_TILE_NV10 + i*4));
-                nvWriteGRAPH(pNv, 0x6900 + i*4, nvReadFB(pNv, NV_PFB_TILE_NV10 + i*4));
-              }
-           } else {
-              if(((pNv->Chipset & 0xfff0) == CHIPSET_G70) ||
-                 ((pNv->Chipset & 0xfff0) == CHIPSET_G71) ||
-                 ((pNv->Chipset & 0xfff0) == CHIPSET_G72) ||
-                 ((pNv->Chipset & 0xfff0) == CHIPSET_G73) ||
-                 ((pNv->Chipset & 0xfff0) == CHIPSET_C512))
-              {
-                 for(i = 0; i < 60; i++) {
-                   nvWriteGRAPH(pNv, 0x0D00 + i*4, nvReadFB(pNv, NV_PFB_TILE_NV40 + i*4));
-                   nvWriteGRAPH(pNv, 0x6900 + i*4, nvReadFB(pNv, NV_PFB_TILE_NV40 + i*4));
-                 }
-              } else {
-                 for(i = 0; i < 48; i++) {
-                   nvWriteGRAPH(pNv, 0x0900 + i*4, nvReadFB(pNv, NV_PFB_TILE_NV40 + i*4));
-                   if(((pNv->Chipset & 0xfff0) != CHIPSET_NV44) &&
-                      ((pNv->Chipset & 0xfff0) != CHIPSET_NV44A) &&
-                      ((pNv->Chipset & 0xfff0) != CHIPSET_C51))
-                   {
-                      nvWriteGRAPH(pNv, 0x6900 + i*4, nvReadFB(pNv, NV_PFB_TILE_NV40 + i*4));
-                   }
-                 }
-              }
-           }
-           /* end nv20+ second surfaces */
-
-           /* begin RAM config */
-           if(pNv->Architecture >= NV_ARCH_40) {
-              if((pNv->Chipset & 0xfff0) == CHIPSET_NV40) {
-                 nvWriteGRAPH(pNv, 0x09A4, nvReadFB(pNv, NV_PFB_CFG0));
-                 nvWriteGRAPH(pNv, 0x09A8, nvReadFB(pNv, NV_PFB_CFG1));
-                 nvWriteGRAPH(pNv, 0x69A4, nvReadFB(pNv, NV_PFB_CFG0));
-                 nvWriteGRAPH(pNv, 0x69A8, nvReadFB(pNv, NV_PFB_CFG1));
-
-                 nvWriteGRAPH(pNv, 0x0820, 0);
-                 nvWriteGRAPH(pNv, 0x0824, 0);
-                 nvWriteGRAPH(pNv, 0x0864, pNv->VRAMPhysicalSize - 1);
-                 nvWriteGRAPH(pNv, 0x0868, pNv->VRAMPhysicalSize - 1);
-              } else {
-                 if(((pNv->Chipset & 0xfff0) == CHIPSET_G70) ||
-                    ((pNv->Chipset & 0xfff0) == CHIPSET_G71) ||
-                    ((pNv->Chipset & 0xfff0) == CHIPSET_G72) ||
-                    ((pNv->Chipset & 0xfff0) == CHIPSET_G73)) 
-                 {
-                    nvWriteGRAPH(pNv, 0x0DF0, nvReadFB(pNv, NV_PFB_CFG0));
-                    nvWriteGRAPH(pNv, 0x0DF4, nvReadFB(pNv, NV_PFB_CFG1));
-                 } else {
-                    nvWriteGRAPH(pNv, 0x09F0, nvReadFB(pNv, NV_PFB_CFG0));
-                    nvWriteGRAPH(pNv, 0x09F4, nvReadFB(pNv, NV_PFB_CFG1));
-                 }
-                 nvWriteGRAPH(pNv, 0x69F0, nvReadFB(pNv, NV_PFB_CFG0));
-                 nvWriteGRAPH(pNv, 0x69F4, nvReadFB(pNv, NV_PFB_CFG1));
-
-                 nvWriteGRAPH(pNv, 0x0840, 0);
-                 nvWriteGRAPH(pNv, 0x0844, 0);
-                 nvWriteGRAPH(pNv, 0x08a0, pNv->VRAMPhysicalSize - 1);
-                 nvWriteGRAPH(pNv, 0x08a4, pNv->VRAMPhysicalSize - 1);
-              }
-           } else {
-              nvWriteGRAPH(pNv, 0x09A4, nvReadFB(pNv, NV_PFB_CFG0));
-              nvWriteGRAPH(pNv, 0x09A8, nvReadFB(pNv, NV_PFB_CFG1));
-              nvWriteGRAPH(pNv, 0x0750, 0x00EA0000);
-              nvWriteGRAPH(pNv, 0x0754, nvReadFB(pNv, NV_PFB_CFG0));
-              nvWriteGRAPH(pNv, 0x0750, 0x00EA0004);
-              nvWriteGRAPH(pNv, 0x0754, nvReadFB(pNv, NV_PFB_CFG1));
-
-              nvWriteGRAPH(pNv, 0x0820, 0);
-              nvWriteGRAPH(pNv, 0x0824, 0);
-              nvWriteGRAPH(pNv, 0x0864, pNv->VRAMPhysicalSize - 1);
-              nvWriteGRAPH(pNv, 0x0868, pNv->VRAMPhysicalSize - 1);
-           }
-           /* end of RAM config */
-
-           nvWriteGRAPH(pNv, 0x0B20, 0x00000000);
-           nvWriteGRAPH(pNv, 0x0B04, 0xFFFFFFFF);
-       }
-    }
-
-    /* begin clipping values */
-    nvWriteGRAPH(pNv, NV_PGRAPH_ABS_UCLIP_XMIN, 0);
-    nvWriteGRAPH(pNv, NV_PGRAPH_ABS_UCLIP_YMIN, 0);
-    nvWriteGRAPH(pNv, NV_PGRAPH_ABS_UCLIP_XMAX, 0x00007FFF);
-    nvWriteGRAPH(pNv, NV_PGRAPH_ABS_UCLIP_YMAX, 0x00007FFF);
-    /* end of clipping values */
+    NVInitSurface(pScrn, state);
+    NVInitGraphContext(pScrn,  state);
 
     if(pNv->Architecture >= NV_ARCH_10) {
         if(pNv->twoHeads) {
@@ -1255,7 +975,7 @@ void nv_unload_state_ext(xf86CrtcPtr crtc)
     regp->CRTC[NV_VGA_CRTCX_FIFO0] = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_FIFO0);
     regp->CRTC[NV_VGA_CRTCX_FIFO_LWM] = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_FIFO_LWM);
     if(pNv->Architecture >= NV_ARCH_30) {
-	regp->CRTC[NV_VGA_CRTCX_FIFO_LWM] |= (NVReadVgaCrtc(crtc, NV_VGA_CRTCX_FIFO_LWM_NV30) & 1) << 8;
+	regp->CRTC[NV_VGA_CRTCX_FIFO_LWM_NV30] |= NVReadVgaCrtc(crtc, NV_VGA_CRTCX_FIFO_LWM_NV30) & 1) << 8;
     }
     regp->CRTC[NV_VGA_CRTCX_CURCTL0] = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_CURCTL0);
     regp->CRTC[NV_VGA_CRTCX_CURCTL1] = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_CURCTL1);
@@ -1282,7 +1002,7 @@ void nv_unload_state_ext(xf86CrtcPtr crtc)
         }
         regp->CRTC[NV_VGA_CRTCX_EXTRA] = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_EXTRA);
 
-        state->cursorConfig = nvReadCurCRTC(pNv, NV_CRTC_CURSOR_CONFIG);
+        state->cursorConfig = nvReadCRTC(pNv, nv_crtc->crtc, NV_CRTC_CURSOR_CONFIG);
 
         if((pNv->Chipset & 0x0ff0) == CHIPSET_NV11) {
            state->dither = nvReadCurRAMDAC(pNv, NV_RAMDAC_DITHER_NV11);

@@ -960,23 +960,10 @@ void NVCalcStateExt (
     state->pixel    = (pixelDepth > 2) ? 3 : pixelDepth;
 }
 
-void NVLoadStateExt (
-    ScrnInfoPtr pScrn,
-    RIVA_HW_STATE *state
-)
+void NVInitSurface(ScrnInfoPtr pScrn, RIVA_HW_STATE *state)
 {
     NVPtr pNv = NVPTR(pScrn);
-    int i, j;
-    CARD32 temp;
-
-    if (!pNv->IRQ)
-        nvWriteMC(pNv, 0x140, 0);
-
-    nvWriteTIMER(pNv, 0x0200, 0x00000008);
-    nvWriteTIMER(pNv, 0x0210, 0x00000003);
-    /*TODO: DRM handle PTIMER interrupts */
-    nvWriteTIMER(pNv, 0x0140, 0x00000000);
-    nvWriteTIMER(pNv, 0x0100, 0xFFFFFFFF);
+    int i;
 
     /* begin surfaces */
     /* it seems those regions are equivalent to the radeon's SURFACEs. needs to go in-kernel just like the SURFACEs */
@@ -1008,6 +995,13 @@ void NVLoadStateExt (
        }
     }
     /* end of surfaces */
+}
+
+void NVInitGraphContext(ScrnInfoPtr pScrn, RIVA_HW_STATE *state)
+{
+    NVPtr pNv = NVPTR(pScrn);
+    int i, j;
+    CARD32 temp;
 
     if(pNv->Architecture < NV_ARCH_10) {
        nvWriteGRAPH(pNv, NV_PGRAPH_DEBUG_0, 0x000001FF);
@@ -1260,6 +1254,26 @@ void NVLoadStateExt (
     nvWriteGRAPH(pNv, NV_PGRAPH_ABS_UCLIP_XMAX, 0x00007FFF);
     nvWriteGRAPH(pNv, NV_PGRAPH_ABS_UCLIP_YMAX, 0x00007FFF);
     /* end of clipping values */
+
+}
+
+void NVLoadStateExt (ScrnInfoPtr pScrn, RIVA_HW_STATE *state)
+{
+    NVPtr pNv = NVPTR(pScrn);
+    CARD32 temp;
+
+    if (!pNv->IRQ)
+        nvWriteMC(pNv, 0x140, 0);
+
+    nvWriteTIMER(pNv, 0x0200, 0x00000008);
+    nvWriteTIMER(pNv, 0x0210, 0x00000003);
+    /*TODO: DRM handle PTIMER interrupts */
+    nvWriteTIMER(pNv, 0x0140, 0x00000000);
+    nvWriteTIMER(pNv, 0x0100, 0xFFFFFFFF);
+
+    NVInitSurface(pScrn, state);
+    NVInitGraphContext(pScrn, state);
+
 
     if(pNv->Architecture >= NV_ARCH_10) {
         if(pNv->twoHeads) {
