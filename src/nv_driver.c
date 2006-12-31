@@ -1841,22 +1841,22 @@ NVRestore(ScrnInfoPtr pScrn)
     vgaHWPtr hwp = VGAHWPTR(pScrn);
     vgaRegPtr vgaReg = &hwp->SavedReg;
     NVPtr pNv = NVPTR(pScrn);
+    xf86CrtcConfigPtr   xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
     NVRegPtr nvReg = &pNv->SavedReg;
+    int i;
 
-    NVLockUnlock(pNv, 0);
-
-    if(pNv->twoHeads) {
-        nvWriteVGA(pNv, NV_VGA_CRTCX_OWNER, pNv->CRTCnumber * 0x3);
-        NVLockUnlock(pNv, 0);
+    for (i = 0; i < xf86_config->num_crtc; i++) {
+	xf86_config->crtc[i]->funcs->restore(xf86_config->crtc[i]);
     }
 
-    /* Only restore text mode fonts/text for the primary card */
-    vgaHWProtect(pScrn, TRUE);
-    NVDACRestore(pScrn, vgaReg, nvReg, pNv->Primary);
-    if(pNv->twoHeads) {
-        nvWriteVGA(pNv, NV_VGA_CRTCX_OWNER, pNv->vtOWNER);
+    
+    for (i = 0; i< xf86_config->num_output; i++) {
+	xf86_config->output[i]->funcs->restore(xf86_config->output[i]);
     }
-    vgaHWProtect(pScrn, FALSE);
+
+
+    vgaHWRestore(pScrn, vgaReg, VGA_SR_FONTS);
+    vgaHWLock(hwp);
 }
 
 #define DEPTH_SHIFT(val, w) ((val << (8 - w)) | (val >> ((w << 1) - 8)))
@@ -2206,15 +2206,20 @@ NVSave(ScrnInfoPtr pScrn)
     NVRegPtr nvReg = &pNv->SavedReg;
     vgaHWPtr pVga = VGAHWPTR(pScrn);
     vgaRegPtr vgaReg = &pVga->SavedReg;
-
-    NVLockUnlock(pNv, 0);
-    if(pNv->twoHeads) {
-      // TODO FIXME DIRTY HACK
-      nvWriteVGA(pNv, NV_VGA_CRTCX_OWNER, 0);//1 * 0x3);
-        NVLockUnlock(pNv, 0);
+    xf86CrtcConfigPtr   xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+    int i;
+    
+    for (i = 0; i < xf86_config->num_crtc; i++) {
+	xf86_config->crtc[i]->funcs->save(xf86_config->crtc[i]);
     }
 
-    NVDACSave(pScrn, vgaReg, nvReg, pNv->Primary);
+
+    for (i = 0; i< xf86_config->num_output; i++) {
+	xf86_config->output[i]->funcs->save(xf86_config->output[i]);
+    }
+
+   vgaHWUnlock(pVga);
+   vgaHWSave(pScrn, vgaReg, VGA_SR_FONTS);
 }
 
 #ifdef RANDR

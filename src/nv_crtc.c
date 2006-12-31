@@ -955,10 +955,19 @@ void nv_crtc_save(xf86CrtcPtr crtc)
     nv_crtc_save_state_ext(crtc, &pNv->SavedReg);
 }
 
+void nv_crtc_restore(xf86CrtcPtr crtc)
+{
+    ScrnInfoPtr pScrn = crtc->scrn;
+    NVPtr pNv = NVPTR(pScrn);
+    
+    nv_crtc_load_state_ext(crtc, &pNv->SavedReg);
+    nv_crtc_load_state_vga(crtc, &pNv->SavedReg);
+}
+
 static const xf86CrtcFuncsRec nv_crtc_funcs = {
     .dpms = nv_crtc_dpms,
     .save = nv_crtc_save, /* XXX */
-    .restore = NULL, /* XXX */
+    .restore = nv_crtc_restore, /* XXX */
     .mode_fixup = nv_crtc_mode_fixup,
     .mode_set = nv_crtc_mode_set,
     .destroy = NULL, /* XXX */
