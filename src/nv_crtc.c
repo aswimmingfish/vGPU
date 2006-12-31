@@ -1128,7 +1128,7 @@ void nv_crtc_save_state_vga(xf86CrtcPtr crtc, RIVA_HW_STATE *state)
 
     regp = &state->crtc_reg[nv_crtc->crtc];
 
-    regp->MiscOutReg = NVReadMiscOutReg(crtc);
+    regp->MiscOutReg = NVReadMiscOut(crtc);
 
     for (i = 0; i < 25; i++)
 	regp->CRTC[i] = NVReadVgaCrtc(crtc, i);

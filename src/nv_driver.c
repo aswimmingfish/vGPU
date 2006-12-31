@@ -1056,7 +1056,7 @@ Bool NVI2CInit(ScrnInfoPtr pScrn)
         mod = "ddc";
         if(xf86LoadSubModule(pScrn, mod)) {
             xf86LoaderReqSymLists(ddcSymbols, NULL);
-            return NVDACi2cInit(pScrn);
+            return TRUE;
         } 
     }
 
