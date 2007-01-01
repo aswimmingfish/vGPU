@@ -337,9 +337,8 @@ void nv_crtc_calc_state_ext(
     /*
      * Save mode parameters.
      */
-    state->bpp    = bpp;    /* this is not bitsPerPixel, it's 8,15,16,32 */
-    state->width  = width;
-    state->height = height;
+    regp->width  = width;
+    regp->height = height;
     /*
      * Extended RIVA registers.
      */
@@ -819,7 +818,7 @@ nv_crtc_mode_set_regs(xf86CrtcPtr crtc, DisplayModePtr mode)
     if(nv_crtc->crtc) {
        state->head  = nvReadCRTC(pNv, 0, NV_CRTC_HEAD_CONFIG) & ~0x00001000;
        state->head2 = nvReadCRTC(pNv, 1, NV_CRTC_HEAD_CONFIG) | 0x00001000;
-       state->crtcOwner = 3;
+       regp->crtcOwner = 3;
        state->pllsel |= 0x20000800;
        state->vpll = nvReadRAMDAC0(pNv, NV_RAMDAC_VPLL);
        if(pNv->twoStagePLL) 
@@ -828,7 +827,7 @@ nv_crtc_mode_set_regs(xf86CrtcPtr crtc, DisplayModePtr mode)
       if(pNv->twoHeads) {
 	state->head  =  nvReadCRTC(pNv, 0, NV_CRTC_HEAD_CONFIG) | 0x00001000;
 	state->head2 =  nvReadCRTC(pNv, 1, NV_CRTC_HEAD_CONFIG) & ~0x00001000;
-	state->crtcOwner = 0;
+	regp->crtcOwner = 0;
 	state->vpll2 = nvReadRAMDAC0(pNv, NV_RAMDAC_VPLL2);
 	if(pNv->twoStagePLL) 
           state->vpll2B = nvReadRAMDAC0(pNv, NV_RAMDAC_VPLL2_B);
@@ -848,7 +847,7 @@ nv_crtc_mode_set_regs(xf86CrtcPtr crtc, DisplayModePtr mode)
 
     regp->CRTC[NV_VGA_CRTCX_FP_HTIMING] = 0;
     regp->CRTC[NV_VGA_CRTCX_FP_VTIMING] = 0;
-    state->displayV = mode->CrtcVDisplay;
+    regp->displayV = mode->CrtcVDisplay;
 }
 
 /**
@@ -1026,8 +1025,8 @@ static void nv_crtc_load_state_ext(xf86CrtcPtr crtc, RIVA_HW_STATE *state)
         nvWriteMC(pNv, 0x1588, 0);
 
         nvWriteCRTC(pNv, nv_crtc->crtc, NV_CRTC_CURSOR_CONFIG, regp->cursorConfig);
-        nvWriteCRTC(pNv, nv_crtc->crtc, NV_CRTC_0830, state->displayV - 3);
-        nvWriteCRTC(pNv, nv_crtc->crtc, NV_CRTC_0834, state->displayV - 1);
+        nvWriteCRTC(pNv, nv_crtc->crtc, NV_CRTC_0830, regp->displayV - 3);
+        nvWriteCRTC(pNv, nv_crtc->crtc, NV_CRTC_0834, regp->displayV - 1);
 	
 	NVWriteVgaCrtc(crtc, NV_VGA_CRTCX_FP_HTIMING, regp->CRTC[NV_VGA_CRTCX_FP_HTIMING]);
 	NVWriteVgaCrtc(crtc, NV_VGA_CRTCX_FP_VTIMING, regp->CRTC[NV_VGA_CRTCX_FP_VTIMING]);
@@ -1121,7 +1120,7 @@ static void nv_crtc_save_state_ext(xf86CrtcPtr crtc, RIVA_HW_STATE *state)
         if(pNv->twoHeads) {
            state->head     = nvReadCRTC(pNv, 0, NV_CRTC_HEAD_CONFIG);
            state->head2    = nvReadCRTC(pNv, 1, NV_CRTC_HEAD_CONFIG);
-           state->crtcOwner = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_OWNER);
+           regp->crtcOwner = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_OWNER);
         }
         regp->CRTC[NV_VGA_CRTCX_EXTRA] = NVReadVgaCrtc(crtc, NV_VGA_CRTCX_EXTRA);
 

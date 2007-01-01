@@ -108,6 +108,11 @@ typedef struct _nv_crtc_reg
     CARD8 Attribute[21];
     unsigned char DAC[768];       /* Internal Colorlookuptable */
     CARD32 cursorConfig;
+    CARD32 crtcOwner;
+    CARD32 width;
+    CARD32 height;
+    CARD32 displayV;
+
 } NVCrtcRegRec, *NVCrtcRegPtr;
 
 typedef struct _nv_output_reg
@@ -116,21 +121,13 @@ typedef struct _nv_output_reg
     CARD32 crtcSync;
     CARD32 dither;
     CARD32 general;
+    CARD32 bpp;
+
 } NVOutputRegRec, *NVOutputRegPtr;
 
 typedef struct _riva_hw_state
 {
-    CARD32 bpp;
-    CARD32 width;
-    CARD32 height;
-    CARD32 interlace;
-    CARD32 repaint0;
-    CARD32 repaint1;
-    CARD32 screen;
-    CARD32 extra;
-    CARD32 fifo;
-    CARD32 pixel;
-    CARD32 horiz;
+
     CARD32 arbitration0;
     CARD32 arbitration1;
     CARD32 pll;
@@ -140,14 +137,12 @@ typedef struct _riva_hw_state
     CARD32 vpllB;
     CARD32 vpll2B;
     CARD32 pllsel;
-    CARD32 crtcOwner;
     CARD32 head;
     CARD32 head2;
     CARD32 config;
 
     CARD32 timingH;
     CARD32 timingV;
-    CARD32 displayV;
     NVCrtcRegRec crtc_reg[2];
     NVOutputRegRec dac_reg[2];
 } RIVA_HW_STATE, *NVRegPtr;

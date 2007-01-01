@@ -278,10 +278,13 @@ nv_output_mode_fixup(xf86OutputPtr output, DisplayModePtr mode,
 static int
 nv_output_tweak_panel(xf86OutputPtr output, NVRegPtr state)
 {
+    NVOutputPrivatePtr nv_output = output->driver_private;
     ScrnInfoPtr pScrn = output->scrn;
     NVPtr pNv = NVPTR(pScrn);
+    NVOutputRegPtr regp;
     int tweak = 0;
     
+    regp = &state->dac_reg[nv_output->ramdac];
     if (pNv->usePanelTweak) {
 	tweak = pNv->PanelTweak;
     } else {
@@ -291,7 +294,7 @@ nv_output_tweak_panel(xf86OutputPtr output, NVRegPtr state)
 	   swapped.  There are no hard rules for what to set here so all
 	   we can do is experiment and apply hacks. */
 	
-	if(((pNv->Chipset & 0xffff) == 0x0328) && (state->bpp == 32)) {
+	if(((pNv->Chipset & 0xffff) == 0x0328) && (regp->bpp == 32)) {
 	    /* At least one NV34 laptop needs this workaround. */
 	    tweak = -1;
 	}
@@ -321,6 +324,8 @@ nv_output_mode_set_regs(xf86OutputPtr output, DisplayModePtr mode)
     
     if (nv_output->mon_type == MT_LCD || nv_output->mon_type == MT_DFP)
 	is_fp = TRUE;
+
+    regp->bpp    = bpp;    /* this is not bitsPerPixel, it's 8,15,16,32 */
 
     regp->scale = NVReadRAMDAC(output, NV_RAMDAC_FP_CONTROL) & 0xfff000ff;
     if(is_fp == 1) {
