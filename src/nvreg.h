@@ -141,6 +141,9 @@
 
 #define NV_RAMDAC_VPLL              0x508
 #define NV_RAMDAC_PLL_SELECT        0x50c
+#define NV_RAMDAC_PLL_SETUP_CONTROL 0x510
+#define NV_RAMDAC_PLL_TEST_COUNTER  0x514
+#define NV_RAMDAC_PALETTE_TEST      0x518
 #define NV_RAMDAC_VPLL2             0x520
 #define NV_RAMDAC_DITHER_NV11       0x528
 #define NV_RAMDAC_052C              0x52c
@@ -153,6 +156,8 @@
 #define NV_RAMDAC_GENERAL_CONTROL   0x600
 #define NV_RAMDAC_TEST_CONTROL      0x608
 #define NV_RAMDAC_TEST_DATA         0x610
+
+#define NV_RAMDAC_TV_SETUP          0x700
 
 #define NV_RAMDAC_FP_VDISP_END      0x800
 #define NV_RAMDAC_FP_VTOTAL         0x804
