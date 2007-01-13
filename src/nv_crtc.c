@@ -861,7 +861,6 @@ nv_crtc_mode_set_regs(xf86CrtcPtr crtc, DisplayModePtr mode)
     regp->CRTC[NV_VGA_CRTCX_FIFO1] = savep->CRTC[NV_VGA_CRTCX_FIFO1] & ~(1<<5);
 
     if(nv_crtc->crtc) {
-       regp->head  = savep->head | 0x00001000;
        if (is_fp) {
 	       regp->head &= ~NV_CRTC_FSEL_FPP2;
 	       regp->head |= NV_CRTC_FSEL_FPP1;
