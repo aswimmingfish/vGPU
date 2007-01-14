@@ -884,8 +884,8 @@ nv_crtc_mode_set_regs(xf86CrtcPtr crtc, DisplayModePtr mode)
 		regp->head &= ~NV_CRTC_FSEL_FPP2;
 		regp->head |= NV_CRTC_FSEL_FPP1;
 	} else {
-		regp->head &= ~NV_CRTC_FSEL_FPP1;
-		regp->head |= NV_CRTC_FSEL_FPP2;
+	        regp->head &= ~NV_CRTC_FSEL_FPP1;
+  	        regp->head |= NV_CRTC_FSEL_FPP2;
 	}
 
 	regp->crtcOwner = 0;
@@ -895,14 +895,17 @@ nv_crtc_mode_set_regs(xf86CrtcPtr crtc, DisplayModePtr mode)
     for (i = 0; i < xf86_config->num_output; i++) {
       xf86OutputPtr  output = xf86_config->output[i];
       NVOutputPrivatePtr nv_output = output->driver_private;
-      
-      if (nv_output->ramdac) {
-	state->vpll2 = state->pll;
-	state->vpll2B = state->pllB;
-	state->pllsel |= 0x20000800;
-      } else {
-	state->vpll = state->pll;
-	state->vpllB = state->pllB;
+
+      if (nv_crtc->crtc == crtc) {
+	if (nv_output->ramdac == 1) {
+	  state->vpll2 = state->pll;
+	  state->vpll2B = state->pllB;
+
+	  state->pllsel |= 0x20000800;
+	} else {
+	  state->vpll = state->pll;
+	  state->vpllB = state->pllB;
+	}
       }
     } 
 
