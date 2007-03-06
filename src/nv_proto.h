@@ -3,17 +3,25 @@
 #ifndef __NV_PROTO_H__
 #define __NV_PROTO_H__
 
+/* in nv_accel_common.c */
+Bool NVAccelCommonInit(ScrnInfoPtr pScrn);
+uint32_t NVAccelGetPixmapOffset(NVPtr pNv, PixmapPtr pPix);
+Bool NVAccelGetCtxSurf2DFormatFromPixmap(PixmapPtr pPix, int *fmt_ret);
+Bool NVAccelGetCtxSurf2DFormatFromPicture(PicturePtr pPix, int *fmt_ret);
+Bool NVAccelSetCtxSurf2D(NVPtr pNv, PixmapPtr psPix, PixmapPtr pdPix, int fmt);
+
 /* in nv_driver.c */
 Bool   NVSwitchMode(int scrnIndex, DisplayModePtr mode, int flags);
 void   NVAdjustFrame(int scrnIndex, int x, int y, int flags);
 Bool   NVI2CInit(ScrnInfoPtr pScrn);
+
+/* in nv_mem.c */
 NVAllocRec *NVAllocateMemory(NVPtr pNv, int type, int size);
 void        NVFreeMemory(NVPtr pNv, NVAllocRec *mem);
 
 /* in nv_dri.c */
 unsigned int NVDRMGetParam(NVPtr pNv, unsigned int param);
 Bool NVDRMSetParam(NVPtr pNv, unsigned int param, unsigned int value);
-Bool NVInitAGP(ScrnInfoPtr pScrn);
 Bool NVDRIScreenInit(ScrnInfoPtr pScrn);
 Bool NVDRIFinishScreenInit(ScrnInfoPtr pScrn);
 extern const char *drmSymbols[], *driSymbols[];
@@ -37,13 +45,13 @@ void  NVDmaWait(NVPtr pNv, int size);
 void  NVDoSync(NVPtr pNv);
 void  NVSync(ScrnInfoPtr pScrn);
 void  NVResetGraphics(ScrnInfoPtr pScrn);
-Bool  NVDmaCreateDMAObject(NVPtr pNv, int handle, int target,
+Bool  NVDmaCreateDMAObject(NVPtr pNv, uint32_t handle, int class, int target,
 			   CARD32 base_address, CARD32 size, int access);
+Bool  NVDmaCreateDMAObjectFromMem(NVPtr pNv, uint32_t handle, int class,
+				  NVAllocRec *mem, int access);
 NVAllocRec *NVDmaCreateNotifier(NVPtr pNv, int handle);
 Bool  NVDmaWaitForNotifier(NVPtr pNv, void *notifier);
-Bool  NVDmaCreateContextObject(NVPtr pNv, int handle, int class, CARD32 flags,
-			       CARD32 dma_in, CARD32 dma_out,
-			       CARD32 dma_notifier);
+Bool  NVDmaCreateContextObject(NVPtr pNv, int handle, int class);
 Bool  NVInitDma(ScrnInfoPtr pScrn);
 
 /* in nv_xaa.c */
