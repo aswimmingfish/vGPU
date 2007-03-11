@@ -396,13 +396,13 @@ nv_output_mode_set_regs(xf86OutputPtr output, DisplayModePtr mode)
 
 	if (is_fp == TRUE)
 	    regp->output = 0x0;
-	else if (nv_crtc->crtc == 0 && nv_output->ramdac == 1 && (two_crt == TRUE))
+	else 
+  	    regp->output = NV_RAMDAC_OUTPUT_DAC_ENABLE;
 
-	    	regp->output = 0x101;
-	else
-		regp->output = 0x1;
+	if (nv_crtc->crtc == 1 && (two_crt == TRUE))
+	  regp->output |= NV_RAMDAC_OUTPUT_SELECT_CRTC2;
 
-	if (nv_crtc->crtc == 1 && nv_output->ramdac == 0 && two_mon) {
+	if (nv_crtc->crtc == 1 && two_mon) {
 	    state->vpll2 = state->pll;
 	    state->vpll2B = state->pllB;
 	    state->pllsel |= (1<<29) | (1<<11);
@@ -633,7 +633,7 @@ void NvSetupOutputs(ScrnInfoPtr pScrn)
 	nv_output->ramdac = i;
 
 	NV_I2CInit(pScrn, &nv_output->pDDCBus, i ? 0x36 : 0x3e, ddc_name[i]);
-	output->possible_crtcs = i ? 1 : crtc_mask;
+	output->possible_crtcs = crtc_mask;
     }
 
     if (pNv->Mobile) {
