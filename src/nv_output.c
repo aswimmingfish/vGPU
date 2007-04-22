@@ -585,14 +585,6 @@ nv_output_get_modes(xf86OutputPtr output)
     xf86OutputSetEDID(output, ddc_mon);
 
     ddc_modes = xf86OutputGetEDIDModes (output);	  
-    if (nv_output->type == OUTPUT_DIGITAL) {
-	nv_output->fpWidth = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_HDISP_END) + 1;
-	nv_output->fpHeight = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_VDISP_END) + 1;
-	nv_output->fpSyncs = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_CONTROL) & 0x30000033;
-	xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "Panel size is %i x %i\n",
-		   nv_output->fpWidth, nv_output->fpHeight);
-
-    }
     return ddc_modes;
 
 }
@@ -658,11 +650,11 @@ nv_output_lvds_get_modes(xf86OutputPtr output)
     ScrnInfoPtr	pScrn = output->scrn;
     NVOutputPrivatePtr nv_output = output->driver_private;
 
-    nv_output->fpWidth = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_HDISP_END) + 1;
-    nv_output->fpHeight = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_VDISP_END) + 1;
+    //    nv_output->fpWidth = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_HDISP_END) + 1;
+    //    nv_output->fpHeight = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_VDISP_END) + 1;
     nv_output->fpSyncs = NVOutputReadRAMDAC(output, NV_RAMDAC_FP_CONTROL) & 0x30000033;
-    xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "Panel size is %i x %i\n",
-	       nv_output->fpWidth, nv_output->fpHeight);
+    //    xf86DrvMsg(pScrn->scrnIndex, X_PROBED, "Panel size is %i x %i\n",
+    //	       nv_output->fpWidth, nv_output->fpHeight);
 
     return NULL;
 
@@ -772,7 +764,7 @@ void Nv20SetupOutputs(ScrnInfoPtr pScrn)
     }
 }
 
-void Nv40SetupOutputs(ScrnInfoPtr pScrn)
+void NvDCBSetupOutputs(ScrnInfoPtr pScrn)
 {
   unsigned char type, port, or;
   NVPtr pNv = NVPTR(pScrn);
@@ -829,30 +821,8 @@ void NvSetupOutputs(ScrnInfoPtr pScrn)
     for (i = 0; i < NV_I2C_BUSES; i++) {
         NV_I2CInit(pScrn, &pNv->pI2CBus[i], nv_i2c_buses[i].reg, nv_i2c_buses[i].name);
     }
-	
-    switch(pNv->Chipset & 0x0ff0) {
-    case CHIPSET_NV04:
-    case CHIPSET_NV10:
-    case CHIPSET_NV11:
-    case CHIPSET_NV15:
-    case CHIPSET_NV17:
-    case CHIPSET_NV18:
-    case CHIPSET_NFORCE:
-    case CHIPSET_NFORCE2:
-    case CHIPSET_NV20:
-    case CHIPSET_NV25:
-    case CHIPSET_NV28:
-    case CHIPSET_NV30:
-    case CHIPSET_NV31:
-    case CHIPSET_NV34:
-    case CHIPSET_NV35:
-    case CHIPSET_NV36:
-	Nv20SetupOutputs(pScrn);
-	break;
-    default:
-	Nv40SetupOutputs(pScrn);
-	break;
-    }
+
+    NvDCBSetupOutputs(pScrn);
 
 #if 0
     if (pNv->Mobile) {

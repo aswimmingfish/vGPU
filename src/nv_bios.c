@@ -1456,6 +1456,14 @@ static void parse_bit_structure(ScrnInfoPtr pScrn, bios_t *bios, unsigned int of
 	}
 }
 
+static unsigned short brs(unsigned char *data, int offset)
+{
+  unsigned short ret;
+
+  ret = (data[offset]) | ((data[offset+1]) << 8);
+  return ret;
+}
+
 static void parse_pins_structure(ScrnInfoPtr pScrn, bios_t *bios, unsigned int offset)
 {
 	int pins_version_major=bios->data[offset+5];
@@ -1464,7 +1472,6 @@ static void parse_pins_structure(ScrnInfoPtr pScrn, bios_t *bios, unsigned int o
 	int init2 = bios->data[offset + 20] + (bios->data[offset + 21] * 256);     
 	int init_size = bios->data[offset + 22] + (bios->data[offset + 23] * 256) + 1;                                                    
 	int ram_tab;
-
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,  "PINS version %d.%d\n",pins_version_major,pins_version_minor);
 
 #if 0
@@ -1512,10 +1519,13 @@ static unsigned int nv_find_dcb_table(ScrnInfoPtr pScrn, bios_t *bios)
 	unsigned char headerSize, entries;
         CARD32 header_word;
 	int i;
+	int sig_offsets[2] = { 0x4, 0x6 };
+	int offset = -1;
 
 	/* get the offset from 0x36 */
 	
 	bufloc = *(CARD16 *)&bios->data[0x36];
+
 	if (bufloc == 0x0) {
 		if ((pNv->Chipset & 0x0ff0) == CHIPSET_NV43) {
 			is_g5 = 1;
@@ -1526,19 +1536,33 @@ static unsigned int nv_find_dcb_table(ScrnInfoPtr pScrn, bios_t *bios)
 	}
 	
 	table2 = &bios->data[bufloc];
-	sig = *(uint32_t*)(table2 + 6);
-	if ((sig != 0x4edcbdcb) && (sig!=0xcbbddc4e))
-		return 0;
 
-	header_word = *(uint32_t *)table2;
-	if (is_g5) {
-		headerSize = 0x3c;
-		entries = 0xa;
-	} else {
-		headerSize = (header_word >> 8) & 0xff;
-		entries = (header_word >> 16) & 0xff;
+	/* lets play hunt the signature */
+	for (i = 0; i < sizeof(sig_offsets) / sizeof(int); i++) {
+	  sig = *(uint32_t*)(table2 + sig_offsets[i]);
+	  if ((sig == 0x4edcbdcb) || (sig == 0xcbbddc4e)) {
+	    offset = sig_offsets[i];
+	    break;
+	  }
 	}
-	
+	if (offset == -1)
+	  return 0;
+
+	if (offset == 6) {
+	  header_word = *(uint32_t *)table2;
+	  if (is_g5) {
+	    headerSize = 0x3c;
+	    entries = 0xa;
+	  } else {
+	    headerSize = (header_word >> 8) & 0xff;
+	    entries = (header_word >> 16) & 0xff;
+	  }
+	} else {
+	  entries = 0xa;
+	  headerSize = 0x8;
+	}
+
+	ErrorF("DCB size is %02X, entries is %02X\n", headerSize, entries);
 	if (entries >= NV40_NUM_DCB_ENTRIES)
 		entries = NV40_NUM_DCB_ENTRIES;
 
