@@ -540,22 +540,6 @@ NVFreeRec(ScrnInfoPtr pScrn)
     pScrn->driverPrivate = NULL;
 }
 
-static Bool
-NvCreateScreenResources (ScreenPtr pScreen)
-{
-   ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-   NVPtr pNv = NVPTR(pScrn);
-
-   pScreen->CreateScreenResources = pNv->CreateScreenResources;
-   if (!(*pScreen->CreateScreenResources)(pScreen))
-      return FALSE;
-
-   if (!xf86RandR12CreateScreenResources (pScreen))
-      return FALSE;
-
-   return TRUE;
-}
-
 static pointer
 nouveauSetup(pointer module, pointer opts, int *errmaj, int *errmin)
 {
@@ -1593,6 +1577,7 @@ NVPreInit(ScrnInfoPtr pScrn, int flags)
 
     NvSetupOutputs(pScrn);
 
+#if 0
     /* Do an initial detection of the outputs while none are configured on yet.
      * This will give us some likely legitimate response for later if both
      * pipes are already allocated and we're asked to do a detect.
@@ -1602,6 +1587,7 @@ NVPreInit(ScrnInfoPtr pScrn, int flags)
       
       output->status = (*output->funcs->detect) (output);
     }
+#endif
     
     if (!xf86InitialConfiguration (pScrn, FALSE)) {
         xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid modes.\n");
@@ -2178,13 +2164,12 @@ NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
     xf86DPMSInit(pScreen, xf86DPMSSet, 0);
 
-    xf86DisableRandR(); /* Disable built-in RandR extension */
-    xf86RandR12Init (pScreen);
-    xf86RandR12SetRotations (pScreen, RR_Rotate_0); /* only 0 degrees for I965G */
+   if (!xf86CrtcScreenInit (pScreen))
+       return FALSE;
+
     pNv->PointerMoved = pScrn->PointerMoved;
     pScrn->PointerMoved = NVPointerMoved;
-    pNv->CreateScreenResources = pScreen->CreateScreenResources;
-    pScreen->CreateScreenResources = NvCreateScreenResources;
+
     if(pNv->ShadowFB) {
 	RefreshAreaFuncPtr refreshArea = NVRefreshArea;
 
