@@ -873,6 +873,26 @@ NVResetCrtcConfig(ScrnInfoPtr pScrn, int set)
     }
 }
 
+static Bool
+NV50AcquireDisplay(ScrnInfoPtr pScrn)
+{
+	if (!NV50DispInit(pScrn))
+		return FALSE;
+	if (!NV50CursorAcquire(pScrn))
+		return FALSE;
+	xf86SetDesiredModes(pScrn);
+
+	return TRUE;
+}
+
+static Bool
+NV50ReleaseDisplay(ScrnInfoPtr pScrn)
+{
+	NV50CursorRelease(pScrn);
+	NV50DispShutdown(pScrn);
+
+	return TRUE;
+}
 
 /*
  * This is called when VT switching back to the X server.  Its job is
@@ -889,6 +909,12 @@ NVEnterVT(int scrnIndex, int flags)
     xf86CrtcConfigPtr   xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
     NVPtr pNv = NVPTR(pScrn);
     int i;
+
+    if (pNv->Architecture == NV_ARCH_50) {
+	    if (!NV50AcquireDisplay(pScrn))
+		    return FALSE;
+	    return TRUE;
+    }
 
     /* Save the current state */
     if (pNv->SaveGeneration != serverGeneration) {
@@ -922,6 +948,11 @@ NVLeaveVT(int scrnIndex, int flags)
 {
     ScrnInfoPtr pScrn = xf86Screens[scrnIndex];
     NVPtr pNv = NVPTR(pScrn);
+
+    if (pNv->Architecture == NV_ARCH_50) {
+	    NV50ReleaseDisplay(pScrn);
+	    return;
+    }
 
     NVSync(pScrn);
     NVRestore(pScrn);
