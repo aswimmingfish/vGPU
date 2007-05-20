@@ -408,7 +408,7 @@ NV50CrtcBlankScreen(xf86CrtcPtr crtc, Bool blank)
         pNv->REGS[0x00610384/4] = pNv->RamAmountKBytes * 1024 - 1;
         pNv->REGS[0x00610388/4] = 0x150000;
         pNv->REGS[0x0061038C/4] = 0;
-        C(0x00000884 + headOff, (pNv->RamAmountKBytes << 2) - 0x40);
+        C(0x00000884 + headOff, (pNv->Cursor->offset - pNv->VRAMPhysical) >> 8);
         if(pNv->_Chipset != 0x50)
             C(0x0000089C + headOff, 1);
         if(pPriv->cursorVisible)
