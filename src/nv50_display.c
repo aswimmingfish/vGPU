@@ -414,7 +414,7 @@ NV50CrtcBlankScreen(xf86CrtcPtr crtc, Bool blank)
         if(pPriv->cursorVisible)
             NV50CrtcShowHideCursor(crtc, TRUE, FALSE);
         C(0x00000840 + headOff, pScrn->depth == 8 ? 0x80000000 : 0xc0000000);
-        C(0x00000844 + headOff, (pNv->RamAmountKBytes * 1024 - 0x5000) >> 8);
+        C(0x00000844 + headOff, (pNv->CLUT->offset - pNv->VRAMPhysical) >> 8);
         if(pNv->_Chipset != 0x50)
             C(0x0000085C + headOff, 1);
         C(0x00000874 + headOff, 1);

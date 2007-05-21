@@ -198,6 +198,7 @@ typedef struct _NVRec {
 
     NVAllocRec *        FB;
     NVAllocRec *        Cursor;
+    NVAllocRec *        CLUT;	/* NV50 only */
     NVAllocRec *        ScratchBuffer;
     NVAllocRec *        AGPScratch;
 

@@ -1887,6 +1887,15 @@ NVMapMem(ScrnInfoPtr pScrn)
 		   pNv->Cursor->size >> 10
 		   );
 
+	if (pNv->Architecture == NV_ARCH_50) {
+		pNv->CLUT = NVAllocateMemory(pNv, NOUVEAU_MEM_FB, 0x1000);
+		if (!pNv->CLUT) {
+			ErrorF("Failed to allocate memory for CLUT\n");
+			return FALSE;
+		}
+	} else
+		pNv->CLUT = NULL;
+
 	pNv->ScratchBuffer = NVAllocateMemory(pNv, NOUVEAU_MEM_FB,
 			pNv->Architecture <NV_ARCH_10 ? 8192 : 16384);
 	if (!pNv->ScratchBuffer) {
@@ -2009,6 +2018,48 @@ NVLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
 
     NVCrtcLoadPalette(crtc);
   }
+}
+
+//#define DEPTH_SHIFT(val, w) ((val << (8 - w)) | (val >> ((w << 1) - 8)))
+#define COLOR(c) (unsigned int)(0x3fff * ((c)/255.0))
+static void
+NV50LoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices, LOCO *colors,
+               VisualPtr pVisual)
+{
+    NVPtr pNv = NVPTR(pScrn);
+    int i, index;
+    volatile struct {
+        unsigned short red, green, blue, unused;
+    } *lut = (void*)pNv->CLUT->map;
+
+    switch(pScrn->depth) {
+        case 15:
+            for(i = 0; i < numColors; i++) {
+                index = indices[i];
+                lut[DEPTH_SHIFT(index, 5)].red = COLOR(colors[index].red);
+                lut[DEPTH_SHIFT(index, 5)].green = COLOR(colors[index].green);
+                lut[DEPTH_SHIFT(index, 5)].blue = COLOR(colors[index].blue);
+            }
+            break;
+        case 16:
+            for(i = 0; i < numColors; i++) {
+                index = indices[i];
+                lut[DEPTH_SHIFT(index, 6)].green = COLOR(colors[index].green);
+                if(index < 32) {
+                    lut[DEPTH_SHIFT(index, 5)].red = COLOR(colors[index].red);
+                    lut[DEPTH_SHIFT(index, 5)].blue = COLOR(colors[index].blue);
+                }
+            }
+            break;
+        default:
+            for(i = 0; i < numColors; i++) {
+                index = indices[i];
+                lut[index].red = COLOR(colors[index].red);
+                lut[index].green = COLOR(colors[index].green);
+                lut[index].blue = COLOR(colors[index].blue);
+            }
+            break;
+    }
 }
 
 /* Mandatory */
@@ -2218,9 +2269,18 @@ NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
     /* Initialize colormap layer.  
 	Must follow initialization of the default colormap */
-    if(!xf86HandleColormaps(pScreen, 256, 8, NVLoadPalette,
-	NULL, CMAP_RELOAD_ON_MODE_SWITCH | CMAP_PALETTED_TRUECOLOR))
-	return FALSE;
+    if (pNv->Architecture < NV_ARCH_50) {
+	    if(!xf86HandleColormaps(pScreen, 256, 8, NVLoadPalette,
+				    NULL,
+				    CMAP_RELOAD_ON_MODE_SWITCH |
+				    CMAP_PALETTED_TRUECOLOR))
+		    return FALSE;
+    } else {
+	    if(!xf86HandleColormaps(pScreen, 256, 8, NV50LoadPalette,
+				    NULL,
+				    CMAP_PALETTED_TRUECOLOR))
+		    return FALSE;
+    }
 
 
     xf86DPMSInit(pScreen, xf86DPMSSet, 0);
@@ -2259,6 +2319,9 @@ NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 
     if(pNv->Rotate == 0 && !pNv->RandRRotation)
        NVInitVideo(pScreen);
+
+    if (pNv->Architecture == NV_ARCH_50 && !NV50AcquireDisplay(pScrn))
+	    return FALSE;
 
     pScreen->SaveScreen = NVSaveScreen;
 
