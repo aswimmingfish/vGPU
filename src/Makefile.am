@@ -45,6 +45,7 @@ nouveau_drv_la_SOURCES = \
          nv_dripriv.h \
          nv_local.h \
          nv_mem.c \
+         nv_notifier.c \
          nv_proto.h \
          nvreg.h \
          nv_setup.c \
@@ -59,7 +60,8 @@ nouveau_drv_la_SOURCES = \
 	 nv50_dac.c \
 	 nv50_display.c \
 	 nv50_output.c \
-	 nv50_sor.c
+	 nv50_sor.c \
+         nv30_exa.c
 
 #riva128_la_LTLIBRARIES = riva128.la
 #riva128_la_LDFLAGS = -module -avoid-version
