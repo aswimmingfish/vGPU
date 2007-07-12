@@ -193,14 +193,16 @@ typedef struct _NVRec {
     unsigned long	VRAMSize;
     /* AGP physical address */
     unsigned long	AGPPhysical;
-    /* Accesible AGP size */
+    /* Accessible AGP size */
     unsigned long	AGPSize;
+    /* PCI buffer virtual address */
+    unsigned long 	SGPhysical;
 
     NVAllocRec *        FB;
     NVAllocRec *        Cursor;
     NVAllocRec *        CLUT;	/* NV50 only */
     NVAllocRec *        ScratchBuffer;
-    NVAllocRec *        AGPScratch;
+    NVAllocRec *        GARTScratch;
 
     Bool                NoAccel;
     Bool                HWCursor;
