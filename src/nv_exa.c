@@ -299,6 +299,17 @@ NVAccelDownloadM2MF(ScrnInfoPtr pScrn, char *dst, uint64_t src_offset,
 		}
 		/*XXX: and hw limitations? */
 
+		if (pNv->Architecture >= NV_ARCH_50) {
+			NVDmaStart(pNv, NvSubMemFormat, 0x200, 1);
+			NVDmaNext (pNv, 1);
+			NVDmaStart(pNv, NvSubMemFormat, 0x21c, 1);
+			NVDmaNext (pNv, 1);
+			/* probably high-order bits of address */
+			NVDmaStart(pNv, NvSubMemFormat, 0x238, 2);
+			NVDmaNext (pNv, 0);
+			NVDmaNext (pNv, 0);
+		}
+
 		NVDmaStart(pNv, NvSubMemFormat,
 				NV_MEMORY_TO_MEMORY_FORMAT_OFFSET_IN, 8);
 		NVDmaNext (pNv, (uint32_t)src_offset);
@@ -399,6 +410,17 @@ NVAccelUploadM2MF(ScrnInfoPtr pScrn, uint64_t dst_offset, const char *src,
 				src += src_pitch;
 				dst += line_len;
 			}
+		}
+
+		if (pNv->Architecture >= NV_ARCH_50) {
+			NVDmaStart(pNv, NvSubMemFormat, 0x200, 1);
+			NVDmaNext (pNv, 1);
+			NVDmaStart(pNv, NvSubMemFormat, 0x21c, 1);
+			NVDmaNext (pNv, 1);
+			/* probably high-order bits of address */
+			NVDmaStart(pNv, NvSubMemFormat, 0x238, 2);
+			NVDmaNext (pNv, 0);
+			NVDmaNext (pNv, 0);
 		}
 
 		/* DMA to VRAM */
