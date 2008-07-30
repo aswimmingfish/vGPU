@@ -110,6 +110,8 @@ NV40_LoadFilterTable(ScrnInfoPtr pScrn)
 
 		int8_t *t=table_mem->map;
 		compute_filter_table(t);
+
+		nouveau_bo_unmap(table_mem);
 	}
 }
 

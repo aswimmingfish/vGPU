@@ -39,16 +39,14 @@ NV30_LoadFragProg(ScrnInfoPtr pScrn, nv_shader_t *shader)
 					"Couldn't alloc fragprog buffer!\n");
 			return;
 		}
-
-		if (nouveau_bo_map(fp_mem, NOUVEAU_BO_RDWR)) {
-			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-				   "Couldn't map fragprog buffer!\n");
-		}
 	}
 
 	if (!shader->hw_id) {
-		uint32_t *map = fp_mem->map + next_hw_id_offset;
+		uint32_t *map;
 		int i;
+
+		nouveau_bo_map(fp_mem, NOUVEAU_BO_WR);
+		map = fp_mem->map + next_hw_id_offset;
 
 		for (i = 0; i < shader->size; i++) {
 			uint32_t data = shader->data[i];
@@ -57,6 +55,8 @@ NV30_LoadFragProg(ScrnInfoPtr pScrn, nv_shader_t *shader)
 #endif
 			map[i] = data;
 		}
+
+		nouveau_bo_unmap(fp_mem);
 
 		shader->hw_id += next_hw_id_offset;
 		next_hw_id_offset += (shader->size * sizeof(uint32_t));
@@ -128,16 +128,14 @@ NV40_LoadFragProg(ScrnInfoPtr pScrn, nv_shader_t *shader)
 				"Couldn't alloc fragprog buffer!\n");
 			return;
 		}
-
-		if (nouveau_bo_map(fp_mem, NOUVEAU_BO_RDWR)) {
-			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-				   "Couldn't map fragprog buffer!\n");
-		}
 	}
 
 	if (!shader->hw_id) {
-		uint32_t *map = fp_mem->map + next_hw_id_offset;
+		uint32_t *map;
 		int i;
+
+		nouveau_bo_map(fp_mem, NOUVEAU_BO_WR);
+		map = fp_mem->map + next_hw_id_offset;
 
 		for (i = 0; i < shader->size; i++) {
 			uint32_t data = shader->data[i];
@@ -146,6 +144,8 @@ NV40_LoadFragProg(ScrnInfoPtr pScrn, nv_shader_t *shader)
 #endif
 			map[i] = data;
 		}
+
+		nouveau_bo_unmap(fp_mem);
 
 		shader->hw_id = next_hw_id_offset;
 		next_hw_id_offset += (shader->size * sizeof(uint32_t));
