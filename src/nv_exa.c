@@ -414,15 +414,6 @@ NVAccelDownloadM2MF(PixmapPtr pspix, int x, int y, int w, int h,
 		OUT_RING  (chan, (1<<8)|1);
 		OUT_RING  (chan, 0);
 
-		nouveau_notifier_reset(pNv->notify0, 0);
-		BEGIN_RING(chan, m2mf, NV04_MEMORY_TO_MEMORY_FORMAT_NOTIFY, 1);
-		OUT_RING  (chan, 0);
-		BEGIN_RING(chan, m2mf, 0x100, 1);
-		OUT_RING  (chan, 0);
-		FIRE_RING (chan);
-		if (nouveau_notifier_wait_status(pNv->notify0, 0, 0, 2000))
-			return FALSE;
-
 		nouveau_bo_map(pNv->GART, NOUVEAU_BO_RD);
 		if (dst_pitch == line_len) {
 			memcpy(dst, pNv->GART->map, dst_pitch * line_count);
@@ -689,15 +680,6 @@ NVAccelUploadM2MF(PixmapPtr pdpix, int x, int y, int w, int h,
 		OUT_RING  (chan, (1<<8)|1);
 		OUT_RING  (chan, 0);
 
-		nouveau_notifier_reset(pNv->notify0, 0);
-		BEGIN_RING(chan, m2mf, NV04_MEMORY_TO_MEMORY_FORMAT_NOTIFY, 1);
-		OUT_RING  (chan, 0);
-		BEGIN_RING(chan, m2mf, 0x100, 1);
-		OUT_RING  (chan, 0);
-		FIRE_RING (chan);
-		if (nouveau_notifier_wait_status(pNv->notify0, 0, 0, 2000))
-			return FALSE;
-
 		if (linear)
 			dst_offset += line_count * dst_pitch;
 		h -= line_count;
@@ -739,8 +721,10 @@ static Bool NVUploadToScreen(PixmapPtr pDst,
 
 	/* try gart-based transfer */
 	if (pNv->GART) {
-		if (NVAccelUploadM2MF(pDst, x, y, w, h, src, src_pitch))
+		if (NVAccelUploadM2MF(pDst, x, y, w, h, src, src_pitch)) {
+			exaMarkSync(pDst->drawable.pScreen);
 			return TRUE;
+		}
 	}
 
 	/* fallback to memcpy-based transfer */
