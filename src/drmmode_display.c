@@ -36,6 +36,7 @@
 #include "sarea.h"
 #include "X11/Xatom.h"
 
+#if 0
 /* not using for the moment */
 uint32_t drmmode_create_new_fb(ScrnInfoPtr pScrn, int width, int height, int *pitch)
 {
@@ -66,6 +67,7 @@ uint32_t drmmode_create_new_fb(ScrnInfoPtr pScrn, int width, int height, int *pi
 
 	return pNv->FB.handle;
 }
+#endif
 
 #if 0
 static Bool drmmode_resize_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, int height);
@@ -283,9 +285,9 @@ drmmode_show_cursor (xf86CrtcPtr crtc)
 	drm_handle_t handle = 0;
 
 	if (drmmode_crtc->index == 1)
-		handle = pNv->Cursor2->map_handle;
+		handle = nouveau_bo_get_drm_map(pNv->Cursor2);
 	else
-		handle = pNv->Cursor->map_handle;
+		handle = nouveau_bo_get_drm_map(pNv->Cursor);
 
 	drmModeSetCursor(drmmode->fd, drmmode_crtc->mode_crtc->crtc_id, handle, 64, 64);
 }
@@ -317,7 +319,7 @@ drmmode_shadow_allocate (xf86CrtcPtr crtc, int width, int height)
 		return NULL;
 	}
 
-	ret = drmModeAddFB(drmmode->fd, width, height, pScrn->depth, pScrn->bitsPerPixel, pitch, drmmode_crtc->shadow->map_handle, &drmmode_crtc->shadow_id);
+	ret = drmModeAddFB(drmmode->fd, width, height, pScrn->depth, pScrn->bitsPerPixel, pitch, nouveau_bo_get_drm_map(drmmode_crtc->shadow), &drmmode_crtc->shadow_id);
 	if (ret)
 		return NULL;
 
@@ -818,7 +820,7 @@ void drmmode_set_fb(ScrnInfoPtr scrn, drmmode_ptr drmmode, int width, int height
 	ErrorF("drmmode_set_fb is called\n");
 
 	ret = drmModeAddFB(drmmode->fd, width, height, scrn->depth,
-			   scrn->bitsPerPixel, pitch, bo->map_handle, &drmmode->fb_id);
+			   scrn->bitsPerPixel, pitch, nouveau_bo_get_drm_map(bo), &drmmode->fb_id);
 
 	if (ret) {
 		ErrorF("Failed to add fb\n");

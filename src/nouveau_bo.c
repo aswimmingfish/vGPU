@@ -303,6 +303,17 @@ nouveau_bo_unmap(struct nouveau_bo *bo)
 	bo->map = NULL;
 }
 
+uint64_t
+nouveau_bo_get_drm_map(struct nouveau_bo *bo)
+{
+	struct nouveau_bo_priv *nvbo = nouveau_bo(bo);
+
+	if (!nvbo)
+		return 0;
+
+	return nvbo->drm.map_handle;
+}
+
 static int
 nouveau_bo_upload(struct nouveau_bo_priv *nvbo)
 {

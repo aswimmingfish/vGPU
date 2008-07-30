@@ -296,6 +296,9 @@ nouveau_bo_map(struct nouveau_bo *, uint32_t flags);
 NOUVEAU_PRIVATE void
 nouveau_bo_unmap(struct nouveau_bo *);
 
+NOUVEAU_PRIVATE uint64_t
+nouveau_bo_get_drm_map(struct nouveau_bo *);
+
 NOUVEAU_PRIVATE int
 nouveau_bo_validate(struct nouveau_channel *, struct nouveau_bo *,
 		    uint32_t flags);
