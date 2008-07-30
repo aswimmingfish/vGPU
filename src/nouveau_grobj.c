@@ -132,7 +132,6 @@ nouveau_grobj_autobind(struct nouveau_grobj *grobj)
 	subc->gr->bound = NOUVEAU_GROBJ_BOUND;
 	subc->gr->subc  = subc - &grobj->channel->subc[0];
 
-	NOUVEAU_ERR("bound 0x%08x to subchannel %d\n", subc->gr->handle, subc->gr->subc);
 	BEGIN_RING(grobj->channel, grobj, 0x0000, 1);
 	OUT_RING  (grobj->channel, grobj->handle);
 }
