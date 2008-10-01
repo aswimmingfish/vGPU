@@ -205,7 +205,7 @@ nouveau_bo_new(struct nouveau_device *dev, uint32_t flags, int align,
 	if (flags & NOUVEAU_BO_PIN) {
 		ret = nouveau_bo_pin((void *)nvbo, nvbo->flags);
 		if (ret) {
-			nouveau_bo_del((void *)nvbo);
+			nouveau_bo_ref(NULL, (void *)nvbo);
 			return ret;
 		}
 	}
@@ -248,26 +248,12 @@ nouveau_bo_ref_handle(struct nouveau_device *dev, uint32_t handle,
 	req.name = handle;
 	ret = ioctl(nvdev->fd, DRM_IOCTL_GEM_OPEN, &req);
 	if (ret) {
-		nouveau_bo_del(bo);
+		nouveau_bo_ref(NULL, bo);
 		return ret;
 	}
 
 	nvbo->size = req.size;
 	nvbo->handle = req.handle;
-	return 0;
-}
-
-int
-nouveau_bo_ref(struct nouveau_device *dev, uint64_t handle,
-	       struct nouveau_bo **bo)
-{
-	struct nouveau_bo_priv *nvbo = ptr_to_bo(handle);
-
-	if (!dev || !bo || *bo)
-		return -EINVAL;
-
-	nvbo->refcount++;
-	*bo = &nvbo->base;
 	return 0;
 }
 
@@ -282,7 +268,7 @@ nouveau_bo_del_cb(void *priv)
 	free(nvbo);
 }
 
-void
+static void
 nouveau_bo_del(struct nouveau_bo **bo)
 {
 	struct nouveau_bo_priv *nvbo;
@@ -302,6 +288,22 @@ nouveau_bo_del(struct nouveau_bo **bo)
 		nouveau_fence_signal_cb(nvbo->fence, nouveau_bo_del_cb, nvbo);
 	else
 		nouveau_bo_del_cb(nvbo);
+}
+
+int
+nouveau_bo_ref(struct nouveau_bo *ref, struct nouveau_bo **pbo)
+{
+	if (!pbo)
+		return -EINVAL;
+
+	if (ref)
+		nouveau_bo(ref)->refcount++;
+
+	if (*pbo)
+		nouveau_bo_del(pbo);
+
+	*pbo = ref;
+	return 0;
 }
 
 int
@@ -457,7 +459,7 @@ nouveau_bo_emit_buffer(struct nouveau_channel *chan, struct nouveau_bo *bo)
 	nvbo->pending = pbbo;
 	nvbo->pending_channel = chan;
 
-	nouveau_bo_ref(bo->device, bo->handle, &ref);
+	nouveau_bo_ref(bo, &ref);
 	pbbo->user_priv = (uint64_t)(unsigned long)ref;
 	pbbo->handle = nvbo->handle;
 	pbbo->valid_domains = NOUVEAU_GEM_DOMAIN_VRAM | NOUVEAU_GEM_DOMAIN_GART;

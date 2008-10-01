@@ -258,7 +258,7 @@ nouveau_xv_bo_realloc(ScrnInfoPtr pScrn, unsigned flags, unsigned size,
 	if (*pbo) {
 		if ((*pbo)->size >= size)
 			return 0;
-		nouveau_bo_del(pbo);
+		nouveau_bo_ref(NULL, pbo);
 	}
 
 	if (pNv->Architecture >= NV_ARCH_50 && (flags & NOUVEAU_BO_VRAM))
@@ -281,9 +281,9 @@ nouveau_xv_bo_realloc(ScrnInfoPtr pScrn, unsigned flags, unsigned size,
 static void
 NVFreePortMemory(ScrnInfoPtr pScrn, NVPortPrivPtr pPriv)
 {
-	nouveau_bo_del(&pPriv->video_mem);
-	nouveau_bo_del(&pPriv->TT_mem_chunk[0]);
-	nouveau_bo_del(&pPriv->TT_mem_chunk[1]);
+	nouveau_bo_ref(NULL, &pPriv->video_mem);
+	nouveau_bo_ref(NULL, &pPriv->TT_mem_chunk[0]);
+	nouveau_bo_ref(NULL, &pPriv->TT_mem_chunk[1]);
 
 }
 
@@ -1032,7 +1032,7 @@ NVPutImage(ScrnInfoPtr pScrn, short src_x, short src_y, short drw_x,
 						    newTTSize,
 						    &pPriv->TT_mem_chunk[1]);
 			if (ret) {
-				nouveau_bo_del(&pPriv->TT_mem_chunk[0]);
+				nouveau_bo_ref(NULL, &pPriv->TT_mem_chunk[0]);
 				pPriv->currentHostBuffer =
 					NO_PRIV_HOST_BUFFER_AVAILABLE;
 			}

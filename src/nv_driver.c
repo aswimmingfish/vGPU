@@ -1664,14 +1664,14 @@ NVUnmapMem(ScrnInfoPtr pScrn)
 {
 	NVPtr pNv = NVPTR(pScrn);
 
-	nouveau_bo_del(&pNv->FB);
-	nouveau_bo_del(&pNv->GART);
-	nouveau_bo_del(&pNv->Cursor);
+	nouveau_bo_ref(NULL, &pNv->FB);
+	nouveau_bo_ref(NULL, &pNv->GART);
+	nouveau_bo_ref(NULL, &pNv->Cursor);
 	if (pNv->randr12_enable) {
-		nouveau_bo_del(&pNv->Cursor2);
+		nouveau_bo_ref(NULL, &pNv->Cursor2);
 	}
-	nouveau_bo_del(&pNv->CLUT0);
-	nouveau_bo_del(&pNv->CLUT1);
+	nouveau_bo_ref(NULL, &pNv->CLUT0);
+	nouveau_bo_ref(NULL, &pNv->CLUT1);
 
 	return TRUE;
 }

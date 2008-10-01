@@ -788,7 +788,7 @@ NVExaDestroyPixmap(ScreenPtr pScreen, void *driverPriv)
 	if (!driverPriv)
 		return;
 
-	nouveau_bo_del(&nvpix->bo);
+	nouveau_bo_ref(NULL, &nvpix->bo);
 	xfree(nvpix);
 }
 
@@ -805,7 +805,7 @@ NVExaModifyPixmapHeader(PixmapPtr pPixmap, int width, int height, int depth,
 		if (!nvpix)
 			return FALSE;
 
-		if (nouveau_bo_ref(pNv->dev, pNv->FB->handle, &nvpix->bo))
+		if (nouveau_bo_ref(pNv->FB, &nvpix->bo))
 			return FALSE;
 
 		miModifyPixmapHeader(pPixmap, width, height, depth,

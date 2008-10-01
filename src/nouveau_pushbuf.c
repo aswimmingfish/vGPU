@@ -108,7 +108,7 @@ nouveau_pushbuf_flush(struct nouveau_channel *chan, unsigned min)
 		}
 
 		nouveau_bo(bo)->pending = NULL;
-		nouveau_bo_del(&bo);
+		nouveau_bo_ref(NULL, &bo);
 	}
 	nvpb->nr_buffers = 0;
 	nvpb->nr_relocs = 0;
