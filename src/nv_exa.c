@@ -473,15 +473,16 @@ NVAccelUploadIFC(ScrnInfoPtr pScrn, const char *src, int src_pitch,
 	BEGIN_RING(chan, ifc, NV01_IMAGE_FROM_CPU_OPERATION, 2);
 	OUT_RING  (chan, NV01_IMAGE_FROM_CPU_OPERATION_SRCCOPY);
 	OUT_RING  (chan, ifc_fmt);
-	BEGIN_RING(chan, ifc, NV01_IMAGE_FROM_CPU_POINT, 3);
-	OUT_RING  (chan, (y << 16) | x); /* dst point */
-	OUT_RING  (chan, (h << 16) | w); /* width/height out */
-	OUT_RING  (chan, (h << 16) | iw); /* width/height in */
 
 	if (padbytes)
 		h--;
 	while (h--) {
 		/* send a line */
+		RING_SPACE(chan, 5 + id);
+		BEGIN_RING(chan, ifc, NV01_IMAGE_FROM_CPU_POINT, 3);
+		OUT_RING  (chan, (y++ << 16) | x); /* dst point */
+		OUT_RING  (chan, (h << 16) | w); /* width/height out */
+		OUT_RING  (chan, (h << 16) | iw); /* width/height in */
 		BEGIN_RING(chan, ifc, NV01_IMAGE_FROM_CPU_COLOR(0), id);
 		OUT_RINGp (chan, src, id);
 
@@ -490,6 +491,11 @@ NVAccelUploadIFC(ScrnInfoPtr pScrn, const char *src, int src_pitch,
 	if (padbytes) {
 		char padding[8];
 		int aux = (padbytes + 7) >> 2;
+		RING_SPACE(chan, 5 + id + 1);
+		BEGIN_RING(chan, ifc, NV01_IMAGE_FROM_CPU_POINT, 3);
+		OUT_RING  (chan, (y++ << 16) | x); /* dst point */
+		OUT_RING  (chan, (h << 16) | w); /* width/height out */
+		OUT_RING  (chan, (h << 16) | iw); /* width/height in */
 		BEGIN_RING(chan, ifc, NV01_IMAGE_FROM_CPU_COLOR(0), id);
 		OUT_RINGp (chan, src, id - aux);
 		memcpy(padding, src + (id - aux) * 4, padbytes);
