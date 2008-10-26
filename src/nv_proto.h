@@ -8,6 +8,7 @@ Bool NVAccelCommonInit(ScrnInfoPtr pScrn);
 Bool NVAccelGetCtxSurf2DFormatFromPixmap(PixmapPtr pPix, int *fmt_ret);
 Bool NVAccelGetCtxSurf2DFormatFromPicture(PicturePtr pPix, int *fmt_ret);
 PixmapPtr NVGetDrawablePixmap(DrawablePtr pDraw);
+void NVAccelFree(NVPtr pNv);
 
 /* in nv_driver.c */
 Bool   NVI2CInit(ScrnInfoPtr pScrn);
@@ -29,11 +30,13 @@ void   NVDACLoadPalette(ScrnInfoPtr pScrn, int numColors, int *indices,
                         LOCO *colors, VisualPtr pVisual );
 Bool   NVDACi2cInit(ScrnInfoPtr pScrn);
 
-/* in nv_video.c */
+/* in nouveau_xv.c */
 void NVInitVideo(ScreenPtr);
 void NVWaitVSync(ScrnInfoPtr pScrn, int crtc);
 void NVSetPortDefaults (ScrnInfoPtr pScrn, NVPortPrivPtr pPriv);
 unsigned int nv_window_belongs_to_crtc(ScrnInfoPtr, int, int, int, int);
+void NVXvDMANotifiersRealFree(void);
+void NVFreePortMemory(ScrnInfoPtr pScrn, NVPortPrivPtr pPriv);
 
 /* in nv_setup.c */
 void   RivaEnterLeave(ScrnInfoPtr pScrn, Bool enter);
@@ -48,8 +51,6 @@ void nv_crtc_set_cursor_position(xf86CrtcPtr crtc, int x, int y);
 void nv_crtc_set_cursor_colors(xf86CrtcPtr crtc, int bg, int fg);
 void nv_crtc_load_cursor_image(xf86CrtcPtr crtc, CARD8 *image);
 void nv_crtc_load_cursor_argb(xf86CrtcPtr crtc, CARD32 *image);
-void nv_crtc_fix_nv40_hw_cursor(ScrnInfoPtr pScrn, uint8_t head);
-void nv_crtc_show_hide_cursor(ScrnInfoPtr pScrn, uint8_t head, Bool show);
 
 /* in nv_dma.c */
 void  NVSync(ScrnInfoPtr pScrn);
@@ -60,7 +61,7 @@ Bool NVExaInit(ScreenPtr pScreen);
 Bool NVExaPixmapIsOnscreen(PixmapPtr pPixmap);
 
 /* in nv_hw.c */
-void NVCalcStateExt(NVPtr,struct _riva_hw_state *,int,int,int,int,int,int);
+void NVCalcStateExt(ScrnInfoPtr,struct _riva_hw_state *,int,int,int,int,int,int);
 void NVLoadStateExt(ScrnInfoPtr pScrn,struct _riva_hw_state *);
 void NVUnloadStateExt(NVPtr,struct _riva_hw_state *);
 void NVSetStartAddress(NVPtr,CARD32);
@@ -80,7 +81,7 @@ bool get_pll_limits(ScrnInfoPtr pScrn, uint32_t limit_match, struct pll_lims *pl
 /* nv_crtc.c */
 void NVCrtcSetBase(xf86CrtcPtr crtc, int x, int y);
 void nv_crtc_init(ScrnInfoPtr pScrn, int crtc_num);
-void NVCrtcLockUnlock(xf86CrtcPtr crtc, Bool lock);
+void NVCrtcLockUnlock(xf86CrtcPtr crtc, bool lock);
 
 /* nv_output.c */
 void nv_encoder_restore(ScrnInfoPtr pScrn, struct nouveau_encoder *nv_encoder);
@@ -101,8 +102,8 @@ void NVWriteVgaCrtc(NVPtr pNv, int head, uint8_t index, uint8_t value);
 uint8_t NVReadVgaCrtc(NVPtr pNv, int head, uint8_t index);
 void NVWriteVgaCrtc5758(NVPtr pNv, int head, uint8_t index, uint8_t value);
 uint8_t NVReadVgaCrtc5758(NVPtr pNv, int head, uint8_t index);
-uint8_t NVReadPVIO(NVPtr pNv, int head, uint16_t port);
-void NVWritePVIO(NVPtr pNv, int head, uint16_t port, uint8_t value);
+uint8_t NVReadPRMVIO(NVPtr pNv, int head, uint32_t reg);
+void NVWritePRMVIO(NVPtr pNv, int head, uint32_t reg, uint8_t value);
 void NVWriteVgaSeq(NVPtr pNv, int head, uint8_t index, uint8_t value);
 uint8_t NVReadVgaSeq(NVPtr pNv, int head, uint8_t index);
 void NVWriteVgaGr(NVPtr pNv, int head, uint8_t index, uint8_t value);
@@ -112,26 +113,15 @@ void NVWriteVgaAttr(NVPtr pNv, int head, uint8_t index, uint8_t value);
 uint8_t NVReadVgaAttr(NVPtr pNv, int head, uint8_t index);
 void NVVgaSeqReset(NVPtr pNv, int head, bool start);
 void NVVgaProtect(NVPtr pNv, int head, bool protect);
-void NVSetOwner(ScrnInfoPtr pScrn, int head);
+void NVSetOwner(NVPtr pNv, int owner);
 void NVLockVgaCrtc(NVPtr pNv, int head, bool lock);
-void NVBlankScreen(ScrnInfoPtr pScrn, int head, bool blank);
+void NVLockVgaCrtcs(NVPtr pNv, bool lock);
+void NVBlankScreen(NVPtr pNv, int head, bool blank);
+void nv_fix_nv40_hw_cursor(NVPtr pNv, int head);
+void nv_show_cursor(NVPtr pNv, int head, bool show);
 int nv_decode_pll_highregs(NVPtr pNv, uint32_t pll1, uint32_t pll2, bool force_single, int refclk);
-void nForceUpdateArbitrationSettings (unsigned VClk, unsigned pixelDepth,
-				      unsigned     *burst, unsigned     *lwm,
-				      NVPtr        pNv);
-void nv30UpdateArbitrationSettings (NVPtr        pNv,
-				    unsigned     *burst,
-				    unsigned     *lwm);
-void nv10UpdateArbitrationSettings (unsigned      VClk, 
-				    unsigned      pixelDepth, 
-				    unsigned     *burst,
-				    unsigned     *lwm,
-				    NVPtr        pNv);
-void nv4UpdateArbitrationSettings (unsigned      VClk, 
-				   unsigned      pixelDepth, 
-				   unsigned     *burst,
-				   unsigned     *lwm,
-				   NVPtr        pNv);
+void nv4_10UpdateArbitrationSettings(ScrnInfoPtr pScrn, int VClk, int bpp, uint8_t *burst, uint16_t *lwm);
+void nv30UpdateArbitrationSettings(uint8_t *burst, uint16_t *lwm);
 uint32_t nv_pitch_align(NVPtr pNv, uint32_t width, int bpp);
 void nv_save_restore_vga_fonts(ScrnInfoPtr pScrn, bool save);
 

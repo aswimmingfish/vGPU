@@ -33,13 +33,17 @@
 #endif
 
 
-/* FIXME: put these somewhere */
-#define SEQ_INDEX VGA_SEQ_INDEX
-#define NV_VGA_CRTCX_OWNER_HEADA 0x0
-#define NV_VGA_CRTCX_OWNER_HEADB 0x3
+/* these defines are made up */
+#define NV_CIO_CRE_44_HEADA 0x0
+#define NV_CIO_CRE_44_HEADB 0x3
 #define FEATURE_MOBILE 0x10
 
-#define DEBUGLEVEL 6
+//#define BIOSLOG(sip, fmt, arg...) xf86DrvMsg(sip->scrnIndex, X_INFO, fmt, ##arg)
+//#define LOG_OLD_VALUE(x) x
+#define BIOSLOG(sip, fmt, arg...)
+#define LOG_OLD_VALUE(x)
+
+#define BIOS_USLEEP(n) usleep(n)
 
 static int crtchead = 0;
 
@@ -86,18 +90,13 @@ static bool nv_cksum(const uint8_t *data, unsigned int length)
 
 static int score_vbios(ScrnInfoPtr pScrn, const uint8_t *data)
 {
-	/* check for BIOS signature */
 	if (!(data[0] == 0x55 && data[1] == 0xAA)) {
-		xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
-			   "... BIOS signature not found\n");
+		xf86DrvMsg(pScrn->scrnIndex, X_NOTICE, "... BIOS signature not found\n");
 		return 0;
 	}
 
 	if (nv_cksum(data, data[2] * 512)) {
-		xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
-			   "... BIOS checksum invalid\n");
-		/* probably ought to set a do_not_execute flag for table parsing here,
-		 * assuming most BIOSen are valid */
+		xf86DrvMsg(pScrn->scrnIndex, X_NOTICE, "... BIOS checksum invalid\n");
 		return 1;
 	} else
 		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "... appears to be valid\n");
@@ -188,6 +187,8 @@ static bool NVShadowVBIOS(ScrnInfoPtr pScrn, uint8_t *data)
 			return true;
 		}
 
+	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "No valid BIOS image found\n");
+
 	return false;
 }
 
@@ -217,7 +218,7 @@ static void parse_init_table(ScrnInfoPtr pScrn, bios_t *bios, unsigned int offse
 static void still_alive(void)
 {
 //	sync();
-//	usleep(2000);
+//	BIOS_USLEEP(2000);
 }
 
 static int nv_valid_reg(ScrnInfoPtr pScrn, uint32_t reg)
@@ -238,8 +239,6 @@ static int nv_valid_reg(ScrnInfoPtr pScrn, uint32_t reg)
 	if (WITHIN(reg,NV_PBUS_OFFSET,NV_PBUS_SIZE))
 		return 1;
 	if (WITHIN(reg,NV_PFIFO_OFFSET,NV_PFIFO_SIZE))
-		return 1;
-	if (pNv->VBIOS.chip_version >= 0x80 && WITHIN(reg, NV50_DISPLAY_OFFSET, NV50_DISPLAY_SIZE))
 		return 1;
 	/* maybe a little large, but it will do for the moment. */
 	if (pNv->VBIOS.chip_version >= 0x80 && WITHIN(reg, 0x1000, 0xEFFF))
@@ -262,6 +261,8 @@ static int nv_valid_reg(ScrnInfoPtr pScrn, uint32_t reg)
 		return 1;
 	if (WITHIN(reg,NV_PCRTC0_OFFSET,NV_PCRTC0_SIZE * 2))
 		return 1;
+	if (pNv->VBIOS.chip_version >= 0x80 && WITHIN(reg, NV50_DISPLAY_OFFSET, NV50_DISPLAY_SIZE))
+		return 1;
 	if (WITHIN(reg,NV_PRAMDAC0_OFFSET,NV_PRAMDAC0_SIZE * 2))
 		return 1;
 	if (pNv->VBIOS.chip_version >= 0x17 && reg == 0x0070fff0)
@@ -279,12 +280,12 @@ static int nv_valid_reg(ScrnInfoPtr pScrn, uint32_t reg)
 static bool nv_valid_idx_port(ScrnInfoPtr pScrn, uint16_t port)
 {
 	/* if adding more ports here, the read/write functions below will need
-	 * updating so that the correct mmio range (PCIO, PDIO, PVIO) is used
-	 * for the port in question
+	 * updating so that the correct mmio range (PRMCIO, PRMDIO, PRMVIO) is
+	 * used for the port in question
 	 */
-	if (port == CRTC_INDEX_COLOR)
+	if (port == NV_CIO_CRX__COLOR)
 		return true;
-	if (port == SEQ_INDEX)
+	if (port == NV_VIO_SRX)
 		return true;
 
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -296,10 +297,10 @@ static bool nv_valid_idx_port(ScrnInfoPtr pScrn, uint16_t port)
 static bool nv_valid_port(ScrnInfoPtr pScrn, uint16_t port)
 {
 	/* if adding more ports here, the read/write functions below will need
-	 * updating so that the correct mmio range (PCIO, PDIO, PVIO) is used
-	 * for the port in question
+	 * updating so that the correct mmio range (PRMCIO, PRMDIO, PRMVIO) is
+	 * used for the port in question
 	 */
-	if (port == VGA_ENABLE)
+	if (port == NV_VIO_VSE2)
 		return true;
 
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
@@ -331,9 +332,7 @@ static uint32_t nv32_rd(ScrnInfoPtr pScrn, uint32_t reg)
 
 	data = NV_RD32(pNv->REGS, reg);
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "	Read:  Reg: 0x%08X, Data: 0x%08X\n", reg, data);
+	BIOSLOG(pScrn, "	Read:  Reg: 0x%08X, Data: 0x%08X\n", reg, data);
 
 	return data;
 }
@@ -349,11 +348,8 @@ static void nv32_wr(ScrnInfoPtr pScrn, uint32_t reg, uint32_t data)
 	if (reg & 0x1)
 		reg &= 0xfffffffe;
 
-	if (DEBUGLEVEL >= 8)
-		nv32_rd(pScrn, reg);
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "	Write: Reg: 0x%08X, Data: 0x%08X\n", reg, data);
+	LOG_OLD_VALUE(nv32_rd(pScrn, reg));
+	BIOSLOG(pScrn, "	Write: Reg: 0x%08X, Data: 0x%08X\n", reg, data);
 
 	if (pNv->VBIOS.execute) {
 		still_alive();
@@ -369,15 +365,13 @@ static uint8_t nv_idx_port_rd(ScrnInfoPtr pScrn, uint16_t port, uint8_t index)
 	if (!nv_valid_idx_port(pScrn, port))
 		return 0;
 
-	if (port == SEQ_INDEX)
+	if (port == NV_VIO_SRX)
 		data = NVReadVgaSeq(pNv, crtchead, index);
-	else	/* assume CRTC_INDEX_COLOR */
+	else	/* assume NV_CIO_CRX__COLOR */
 		data = NVReadVgaCrtc(pNv, crtchead, index);
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "	Indexed IO read:  Port: 0x%04X, Index: 0x%02X, Head: 0x%02X, Data: 0x%02X\n",
-			   port, index, crtchead, data);
+	BIOSLOG(pScrn, "	Indexed IO read:  Port: 0x%04X, Index: 0x%02X, Head: 0x%02X, Data: 0x%02X\n",
+		port, index, crtchead, data);
 
 	return data;
 }
@@ -390,30 +384,27 @@ static void nv_idx_port_wr(ScrnInfoPtr pScrn, uint16_t port, uint8_t index, uint
 		return;
 
 	/* The current head is maintained in a file scope variable crtchead.
-	 * We trap changes to CRTCX_OWNER and update the head variable
-	 * and hence the register set written.
-	 * As CRTCX_OWNER only exists on CRTC0, we update crtchead to head0
-	 * in advance of the write, and to head1 after the write
+	 * We trap changes to CR44 and update the head variable and hence the
+	 * register set written.
+	 * As CR44 only exists on CRTC0, we update crtchead to head0 in advance
+	 * of the write, and to head1 after the write
 	 */
-	if (port == CRTC_INDEX_COLOR && index == NV_VGA_CRTCX_OWNER && data != NV_VGA_CRTCX_OWNER_HEADB)
+	if (port == NV_CIO_CRX__COLOR && index == NV_CIO_CRE_44 && data != NV_CIO_CRE_44_HEADB)
 		crtchead = 0;
 
-	if (DEBUGLEVEL >= 8)
-		nv_idx_port_rd(pScrn, port, index);
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "	Indexed IO write: Port: 0x%04X, Index: 0x%02X, Head: 0x%02X, Data: 0x%02X\n",
-			   port, index, crtchead, data);
+	LOG_OLD_VALUE(nv_idx_port_rd(pScrn, port, index));
+	BIOSLOG(pScrn, "	Indexed IO write: Port: 0x%04X, Index: 0x%02X, Head: 0x%02X, Data: 0x%02X\n",
+		port, index, crtchead, data);
 
 	if (pNv->VBIOS.execute) {
 		still_alive();
-		if (port == SEQ_INDEX)
+		if (port == NV_VIO_SRX)
 			NVWriteVgaSeq(pNv, crtchead, index, data);
-		else	/* assume CRTC_INDEX_COLOR */
+		else	/* assume NV_CIO_CRX__COLOR */
 			NVWriteVgaCrtc(pNv, crtchead, index, data);
 	}
 
-	if (port == CRTC_INDEX_COLOR && index == NV_VGA_CRTCX_OWNER && data == NV_VGA_CRTCX_OWNER_HEADB)
+	if (port == NV_CIO_CRX__COLOR && index == NV_CIO_CRE_44 && data == NV_CIO_CRE_44_HEADB)
 		crtchead = 1;
 }
 
@@ -425,12 +416,10 @@ static uint8_t nv_port_rd(ScrnInfoPtr pScrn, uint16_t port)
 	if (!nv_valid_port(pScrn, port))
 		return 0;
 
-	data = NVReadPVIO(pNv, crtchead, port);
+	data = NVReadPRMVIO(pNv, crtchead, NV_PRMVIO0_OFFSET + port);
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "	IO read:  Port: 0x%04X, Head: 0x%02X, Data: 0x%02X\n",
-			   port, crtchead, data);
+	BIOSLOG(pScrn, "	IO read:  Port: 0x%04X, Head: 0x%02X, Data: 0x%02X\n",
+		port, crtchead, data);
 
 	return data;
 }
@@ -442,32 +431,13 @@ static void nv_port_wr(ScrnInfoPtr pScrn, uint16_t port, uint8_t data)
 	if (!nv_valid_port(pScrn, port))
 		return;
 
-	if (DEBUGLEVEL >= 8)
-		nv_port_rd(pScrn, port);
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "	IO write: Port: 0x%04X, Head: 0x%02X, Data: 0x%02X\n",
-			   port, crtchead, data);
+	LOG_OLD_VALUE(nv_port_rd(pScrn, port));
+	BIOSLOG(pScrn, "	IO write: Port: 0x%04X, Head: 0x%02X, Data: 0x%02X\n",
+		port, crtchead, data);
 
 	if (pNv->VBIOS.execute) {
 		still_alive();
-		NVWritePVIO(pNv, crtchead, port, data);
-	}
-}
-
-#define ACCESS_UNLOCK 0
-#define ACCESS_LOCK 1
-static void crtc_access(ScrnInfoPtr pScrn, bool lock)
-{
-	NVPtr pNv = NVPTR(pScrn);
-
-	if (pNv->twoHeads)
-		NVSetOwner(pScrn, 0);
-	NVLockVgaCrtc(pNv, 0, lock);
-	if (pNv->twoHeads) {
-		NVSetOwner(pScrn, 1);
-		NVLockVgaCrtc(pNv, 1, lock);
-		NVSetOwner(pScrn, crtchead);
+		NVWritePRMVIO(pNv, crtchead, NV_PRMVIO0_OFFSET + port, data);
 	}
 }
 
@@ -492,20 +462,15 @@ static bool io_flag_condition(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, 
 	uint8_t cmpval = bios->data[condptr + 8];
 	uint8_t data;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, FlagArray: 0x%04X, FAMask: 0x%02X, Cmpval: 0x%02X\n",
-			   offset, crtcport, crtcindex, mask, shift, flagarray, flagarraymask, cmpval);
+	BIOSLOG(pScrn, "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, FlagArray: 0x%04X, FAMask: 0x%02X, Cmpval: 0x%02X\n",
+		offset, crtcport, crtcindex, mask, shift, flagarray, flagarraymask, cmpval);
 
 	data = nv_idx_port_rd(pScrn, crtcport, crtcindex);
 
 	data = bios->data[flagarray + ((data & mask) >> shift)];
 	data &= flagarraymask;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Checking if 0x%02X equals 0x%02X\n",
-			   offset, data, cmpval);
+	BIOSLOG(pScrn, "0x%04X: Checking if 0x%02X equals 0x%02X\n", offset, data, cmpval);
 
 	if (data == cmpval)
 		return true;
@@ -734,7 +699,7 @@ static void setPLL_single(ScrnInfoPtr pScrn, uint32_t reg, int NM, int log2P)
 	nv32_wr(pScrn, reg, (oldpll & 0xffff0000) | NM);
 
 	/* wait a bit */
-	usleep(64000);
+	BIOS_USLEEP(64000);
 	nv32_rd(pScrn, reg);
 
 	/* then write P as well */
@@ -896,7 +861,7 @@ static void setPLL(ScrnInfoPtr pScrn, bios_t *bios, uint32_t reg, uint32_t clk)
 		getMNP_double(pScrn, &pll_lim, clk, &NM1, &NM2, &log2P);
 		if (NM2 == 0xdead) {
 			xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
-				   "Could not find a suitable set of coefficients, giving up\n");
+				   "Could not find a suitable set of PLL coefficients, giving up\n");
 			return;
 		}
 		if (reg > 0x405c)
@@ -999,10 +964,8 @@ static bool init_io_restrict_prog(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offs
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, Count: 0x%02X, Reg: 0x%08X\n",
-			   offset, crtcport, crtcindex, mask, shift, count, reg);
+	BIOSLOG(pScrn, "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, Count: 0x%02X, Reg: 0x%08X\n",
+		offset, crtcport, crtcindex, mask, shift, count, reg);
 
 	config = (nv_idx_port_rd(pScrn, crtcport, crtcindex) & mask) >> shift;
 	if (config > count) {
@@ -1014,9 +977,7 @@ static bool init_io_restrict_prog(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offs
 
 	configval = le32_to_cpu(*((uint32_t *)(&bios->data[offset + 11 + config * 4])));
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Writing config %02X\n", offset, config);
+	BIOSLOG(pScrn, "0x%04X: Writing config %02X\n", offset, config);
 
 	nv32_wr(pScrn, reg, configval);
 
@@ -1039,9 +1000,7 @@ static bool init_repeat(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_e
 
 	/* no iexec->execute check by design */
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "0x%04X: REPEATING FOLLOWING SEGMENT %d TIMES\n",
-		   offset, count);
+	BIOSLOG(pScrn, "0x%04X: Repeating following segment %d times\n", offset, count);
 
 	iexec->repeat = true;
 
@@ -1094,10 +1053,8 @@ static bool init_io_restrict_pll(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offse
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, IO Flag Condition: 0x%02X, Count: 0x%02X, Reg: 0x%08X\n",
-			   offset, crtcport, crtcindex, mask, shift, io_flag_condition_idx, count, reg);
+	BIOSLOG(pScrn, "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, IO Flag Condition: 0x%02X, Count: 0x%02X, Reg: 0x%08X\n",
+		offset, crtcport, crtcindex, mask, shift, io_flag_condition_idx, count, reg);
 
 	config = (nv_idx_port_rd(pScrn, crtcport, crtcindex) & mask) >> shift;
 	if (config > count) {
@@ -1111,18 +1068,14 @@ static bool init_io_restrict_pll(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offse
 
 	if (io_flag_condition_idx > 0) {
 		if (io_flag_condition(pScrn, bios, offset, io_flag_condition_idx)) {
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: CONDITION FULFILLED - FREQ DOUBLED\n", offset);
+			BIOSLOG(pScrn, "0x%04X: Condition fulfilled -- frequency doubled\n", offset);
 			freq *= 2;
 		} else
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: CONDITION IS NOT FULFILLED. FREQ UNCHANGED\n", offset);
+			BIOSLOG(pScrn, "0x%04X: Condition not fulfilled -- frequency unchanged\n", offset);
 	}
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%08X, Config: 0x%02X, Freq: %d0kHz\n",
-			   offset, reg, config, freq);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%08X, Config: 0x%02X, Freq: %d0kHz\n",
+		offset, reg, config, freq);
 
 	setPLL(pScrn, bios, reg, freq * 10);
 
@@ -1177,10 +1130,8 @@ static bool init_copy(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exe
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%08X, Shift: 0x%02X, SrcMask: 0x%02X, Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X\n",
-			   offset, reg, shift, srcmask, crtcport, crtcindex, mask);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%08X, Shift: 0x%02X, SrcMask: 0x%02X, Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X\n",
+		offset, reg, shift, srcmask, crtcport, crtcindex, mask);
 
 	data = nv32_rd(pScrn, reg);
 
@@ -1206,11 +1157,9 @@ static bool init_not(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec
 	 * Invert the current execute / no-execute condition (i.e. "else")
 	 */
 	if (iexec->execute)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ------ SKIPPING FOLLOWING COMMANDS  ------\n", offset);
+		BIOSLOG(pScrn, "0x%04X: ------ Skipping following commands  ------\n", offset);
 	else
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ------ EXECUTING FOLLOWING COMMANDS ------\n", offset);
+		BIOSLOG(pScrn, "0x%04X: ------ Executing following commands ------\n", offset);
 
 	iexec->execute = !iexec->execute;
 	return true;
@@ -1234,13 +1183,9 @@ static bool init_io_flag_condition(ScrnInfoPtr pScrn, bios_t *bios, uint16_t off
 		return true;
 
 	if (io_flag_condition(pScrn, bios, offset, cond))
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: CONDITION FULFILLED - CONTINUING TO EXECUTE\n", offset);
+		BIOSLOG(pScrn, "0x%04X: Condition fulfilled -- continuing to execute\n", offset);
 	else {
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: CONDITION IS NOT FULFILLED\n", offset);
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ------ SKIPPING FOLLOWING COMMANDS  ------\n", offset);
+		BIOSLOG(pScrn, "0x%04X: Condition not fulfilled -- skipping following commands\n", offset);
 		iexec->execute = false;
 	}
 
@@ -1277,18 +1222,14 @@ static bool init_idx_addr_latched(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offs
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ControlReg: 0x%08X, DataReg: 0x%08X, Mask: 0x%08X, Data: 0x%08X, Count: 0x%02X\n",
-			   offset, controlreg, datareg, mask, data, count);
+	BIOSLOG(pScrn, "0x%04X: ControlReg: 0x%08X, DataReg: 0x%08X, Mask: 0x%08X, Data: 0x%08X, Count: 0x%02X\n",
+		offset, controlreg, datareg, mask, data, count);
 
 	for (i = 0; i < count; i++) {
 		uint8_t instaddress = bios->data[offset + 18 + i * 2];
 		uint8_t instdata = bios->data[offset + 19 + i * 2];
 
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: Address: 0x%02X, Data: 0x%02X\n", offset, instaddress, instdata);
+		BIOSLOG(pScrn, "0x%04X: Address: 0x%02X, Data: 0x%02X\n", offset, instaddress, instdata);
 
 		nv32_wr(pScrn, datareg, instdata);
 		value = (nv32_rd(pScrn, controlreg) & mask) | data | instaddress;
@@ -1330,10 +1271,8 @@ static bool init_io_restrict_pll2(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offs
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, Count: 0x%02X, Reg: 0x%08X\n",
-			   offset, crtcport, crtcindex, mask, shift, count, reg);
+	BIOSLOG(pScrn, "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Shift: 0x%02X, Count: 0x%02X, Reg: 0x%08X\n",
+		offset, crtcport, crtcindex, mask, shift, count, reg);
 
 	if (!reg)
 		return true;
@@ -1348,10 +1287,8 @@ static bool init_io_restrict_pll2(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offs
 
 	freq = le32_to_cpu(*((uint32_t *)(&bios->data[offset + 11 + config * 4])));
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%08X, Config: 0x%02X, Freq: %dkHz\n",
-			   offset, reg, config, freq);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%08X, Config: 0x%02X, Freq: %dkHz\n",
+		offset, reg, config, freq);
 
 	setPLL(pScrn, bios, reg, freq);
 
@@ -1375,10 +1312,8 @@ static bool init_pll2(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exe
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%04X, Freq: %dkHz\n",
-			   offset, reg, freq);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%04X, Freq: %dkHz\n",
+		offset, reg, freq);
 
 	setPLL(pScrn, bios, reg, freq);
 
@@ -1400,11 +1335,9 @@ static uint32_t get_tmds_index_reg(ScrnInfoPtr pScrn, uint8_t mlv)
 
 	if (mlv >= 0x80) {
 		/* here we assume that the DCB table has already been parsed */
-		uint8_t dcb_entry;
+		uint8_t dcb_entry = NVReadVgaCrtc5758(NVPTR(pScrn), crtchead, 0);
 		int dacoffset;
-		/* This register needs to be written to set index for reading CR58 */
-		nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_57, 0);
-		dcb_entry = nv_idx_port_rd(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_58);
+
 		if (dcb_entry > pNv->dcb_table.entries) {
 			xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 				   "CR58 doesn't have a valid DCB entry currently (%02X)\n", dcb_entry);
@@ -1449,15 +1382,13 @@ static bool init_tmds(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exe
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: MagicLookupValue: 0x%02X, TMDSAddr: 0x%02X, Mask: 0x%02X, Data: 0x%02X\n",
-			   offset, mlv, tmdsaddr, mask, data);
+	BIOSLOG(pScrn, "0x%04X: MagicLookupValue: 0x%02X, TMDSAddr: 0x%02X, Mask: 0x%02X, Data: 0x%02X\n",
+		offset, mlv, tmdsaddr, mask, data);
 
 	if (!(reg = get_tmds_index_reg(pScrn, mlv)))
 		return false;
 
-	nv32_wr(pScrn, reg, tmdsaddr | 0x10000);
+	nv32_wr(pScrn, reg, tmdsaddr | NV_RAMDAC_FP_TMDS_CONTROL_WRITE_DISABLE);
 	value = (nv32_rd(pScrn, reg + 4) & mask) | data;
 	nv32_wr(pScrn, reg + 4, value);
 	nv32_wr(pScrn, reg, tmdsaddr);
@@ -1489,10 +1420,8 @@ static bool init_zm_tmds_group(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset,
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: MagicLookupValue: 0x%02X, Count: 0x%02X\n",
-			   offset, mlv, count);
+	BIOSLOG(pScrn, "0x%04X: MagicLookupValue: 0x%02X, Count: 0x%02X\n",
+		offset, mlv, count);
 
 	if (!(reg = get_tmds_index_reg(pScrn, mlv)))
 		return false;
@@ -1534,21 +1463,19 @@ static bool init_cr_idx_adr_latch(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offs
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Index1: 0x%02X, Index2: 0x%02X, BaseAddr: 0x%02X, Count: 0x%02X\n",
-			   offset, crtcindex1, crtcindex2, baseaddr, count);
+	BIOSLOG(pScrn, "0x%04X: Index1: 0x%02X, Index2: 0x%02X, BaseAddr: 0x%02X, Count: 0x%02X\n",
+		offset, crtcindex1, crtcindex2, baseaddr, count);
 
-	oldaddr = nv_idx_port_rd(pScrn, CRTC_INDEX_COLOR, crtcindex1);
+	oldaddr = nv_idx_port_rd(pScrn, NV_CIO_CRX__COLOR, crtcindex1);
 
 	for (i = 0; i < count; i++) {
-		nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, crtcindex1, baseaddr + i);
+		nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, crtcindex1, baseaddr + i);
 
 		data = bios->data[offset + 5 + i];
-		nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, crtcindex2, data);
+		nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, crtcindex2, data);
 	}
 
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, crtcindex1, oldaddr);
+	nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, crtcindex1, oldaddr);
 
 	return true;
 }
@@ -1574,13 +1501,11 @@ static bool init_cr(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec_
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Index: 0x%02X, Mask: 0x%02X, Data: 0x%02X\n",
-			   offset, crtcindex, mask, data);
+	BIOSLOG(pScrn, "0x%04X: Index: 0x%02X, Mask: 0x%02X, Data: 0x%02X\n",
+		offset, crtcindex, mask, data);
 
-	value = (nv_idx_port_rd(pScrn, CRTC_INDEX_COLOR, crtcindex) & mask) | data;
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, crtcindex, value);
+	value = (nv_idx_port_rd(pScrn, NV_CIO_CRX__COLOR, crtcindex) & mask) | data;
+	nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, crtcindex, value);
 
 	return true;
 }
@@ -1602,7 +1527,7 @@ static bool init_zm_cr(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_ex
 	if (!iexec->execute)
 		return true;
 
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, crtcindex, data);
+	nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, crtcindex, data);
 
 	return true;
 }
@@ -1660,35 +1585,24 @@ static bool init_condition_time(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset
 
 	retries *= 50;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Cond: 0x%02X, Retries: 0x%02X\n", offset, cond, retries);
+	BIOSLOG(pScrn, "0x%04X: Cond: 0x%02X, Retries: 0x%02X\n", offset, cond, retries);
 
 	for (; retries > 0; retries--) {
 		data = nv32_rd(pScrn, reg) & mask;
 
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: Checking if 0x%08X equals 0x%08X\n",
-				   offset, data, cmpval);
+		BIOSLOG(pScrn, "0x%04X: Checking if 0x%08X equals 0x%08X\n", offset, data, cmpval);
 
 		if (data != cmpval) {
-			if (DEBUGLEVEL >= 6)
-				xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-					   "0x%04X: Condition not met, sleeping for 2ms\n", offset);
-			usleep(2000);
+			BIOSLOG(pScrn, "0x%04X: Condition not met, sleeping for 2ms\n", offset);
+			BIOS_USLEEP(2000);
 		} else {
-			if (DEBUGLEVEL >= 6)
-				xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-					   "0x%04X: Condition met, continuing\n", offset);
+			BIOSLOG(pScrn, "0x%04X: Condition met, continuing\n", offset);
 			break;
 		}
 	}
 
 	if (data != cmpval) {
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: Condition still not met, skiping following opcodes\n", offset);
+		BIOSLOG(pScrn, "0x%04X: Condition still not met, skiping following opcodes\n", offset);
 		iexec->execute = false;
 	}
 
@@ -1717,10 +1631,7 @@ static bool init_zm_reg_sequence(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offse
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: BaseReg: 0x%08X, Count: 0x%02X\n",
-			   offset, basereg, count);
+	BIOSLOG(pScrn, "0x%04X: BaseReg: 0x%08X, Count: 0x%02X\n", offset, basereg, count);
 
 	for (i = 0; i < count; i++) {
 		uint32_t reg = basereg + i * 4;
@@ -1780,13 +1691,11 @@ static bool init_sub_direct(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, in
 	if (!iexec->execute)
 		return true;
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,  "0x%04X: EXECUTING SUB-ROUTINE AT 0x%04X\n",
-			offset, sub_offset);
+	BIOSLOG(pScrn, "0x%04X: Executing subroutine at 0x%04X\n", offset, sub_offset);
 
 	parse_init_table(pScrn, bios, sub_offset, iexec);
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,  "0x%04X: END OF SUB-ROUTINE AT 0x%04X\n",
-			offset, sub_offset);
+	BIOSLOG(pScrn, "0x%04X: End of 0x%04X subroutine\n", offset, sub_offset);
 
 	return true;
 }
@@ -1819,10 +1728,8 @@ static bool init_copy_nv_reg(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, i
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: SrcReg: 0x%08X, Shift: 0x%02X, SrcMask: 0x%08X, Xor: 0x%08X, DstReg: 0x%08X, DstMask: 0x%08X\n",
-			   offset, srcreg, shift, srcmask, xor, dstreg, dstmask);
+	BIOSLOG(pScrn, "0x%04X: SrcReg: 0x%08X, Shift: 0x%02X, SrcMask: 0x%08X, Xor: 0x%08X, DstReg: 0x%08X, DstMask: 0x%08X\n",
+		offset, srcreg, shift, srcmask, xor, dstreg, dstmask);
 
 	srcvalue = nv32_rd(pScrn, srcreg);
 
@@ -1902,12 +1809,12 @@ static bool init_compute_mem(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, i
 	/* no iexec->execute check by design */
 
 	/* on every card I've seen, this step gets done for us earlier in the init scripts
-	uint8_t crdata = nv_idx_port_rd(pScrn, SEQ_INDEX, 0x01);
-	nv_idx_port_wr(pScrn, SEQ_INDEX, 0x01, crdata | 0x20);
+	uint8_t crdata = nv_idx_port_rd(pScrn, NV_VIO_SRX, 0x01);
+	nv_idx_port_wr(pScrn, NV_VIO_SRX, 0x01, crdata | 0x20);
 	*/
 
 	/* this also has probably been done in the scripts, but an mmio trace of
-	 * s3 resume shows nvidia doing it anyway (unlike the SEQ_INDEX write)
+	 * s3 resume shows nvidia doing it anyway (unlike the NV_VIO_SRX write)
 	 */
 	nv32_wr(pScrn, NV_PFB_REFCTRL, NV_PFB_REFCTRL_VALID_1);
 
@@ -1940,7 +1847,7 @@ static bool init_reset(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_ex
 	nv32_wr(pScrn, NV_PBUS_PCI_NV_19, 0);
 	nv32_wr(pScrn, reg, value1);
 
-	usleep(10);
+	BIOS_USLEEP(10);
 
 	nv32_wr(pScrn, reg, value2);
 	nv32_wr(pScrn, NV_PBUS_PCI_NV_19, pci_nv_19);
@@ -1965,14 +1872,15 @@ static bool init_configure_mem(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset,
 
 	/* no iexec->execute check by design */
 
-	uint16_t meminitoffs = bios->legacy.mem_init_tbl_ptr + MEM_INIT_SIZE * (nv_idx_port_rd(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_SCRATCH4) >> 4);
+	uint16_t meminitoffs = bios->legacy.mem_init_tbl_ptr + MEM_INIT_SIZE * (nv_idx_port_rd(pScrn, NV_CIO_CRX__COLOR, NV_CIO_CRE_SCRATCH4__INDEX) >> 4);
 	uint16_t seqtbloffs = bios->legacy.sdr_seq_tbl_ptr, meminitdata = meminitoffs + 6;
 	uint32_t reg, data;
 
 	if (bios->major_version > 2)
 		return false;
 
-	nv_idx_port_wr(pScrn, SEQ_INDEX, 0x01, nv_idx_port_rd(pScrn, SEQ_INDEX, 0x01) | 0x20);
+	nv_idx_port_wr(pScrn, NV_VIO_SRX, NV_VIO_SR_CLOCK_INDEX,
+		       nv_idx_port_rd(pScrn, NV_VIO_SRX, NV_VIO_SR_CLOCK_INDEX) | 0x20);
 
 	if (bios->data[meminitoffs] & 1)
 		seqtbloffs = bios->legacy.ddr_seq_tbl_ptr;
@@ -2017,7 +1925,7 @@ static bool init_configure_clk(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset,
 
 	/* no iexec->execute check by design */
 
-	uint16_t meminitoffs = bios->legacy.mem_init_tbl_ptr + MEM_INIT_SIZE * (nv_idx_port_rd(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_SCRATCH4) >> 4);
+	uint16_t meminitoffs = bios->legacy.mem_init_tbl_ptr + MEM_INIT_SIZE * (nv_idx_port_rd(pScrn, NV_CIO_CRX__COLOR, NV_CIO_CRE_SCRATCH4__INDEX) >> 4);
 	int clock;
 
 	if (bios->major_version > 2)
@@ -2053,7 +1961,7 @@ static bool init_configure_preinit(ScrnInfoPtr pScrn, bios_t *bios, uint16_t off
 	if (bios->major_version > 2)
 		return false;
 
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_SCRATCH4, cr3c);
+	nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, NV_CIO_CRE_SCRATCH4__INDEX, cr3c);
 
 	return true;
 }
@@ -2077,10 +1985,8 @@ static bool init_io(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec_
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Port: 0x%04X, Mask: 0x%02X, Data: 0x%02X\n",
-			   offset, crtcport, mask, data);
+	BIOSLOG(pScrn, "0x%04X: Port: 0x%04X, Mask: 0x%02X, Data: 0x%02X\n",
+		offset, crtcport, mask, data);
 
 	nv_port_wr(pScrn, crtcport, (nv_port_rd(pScrn, crtcport) & mask) | data);
 
@@ -2102,15 +2008,13 @@ static bool init_sub(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec
 	if (!iexec->execute)
 		return true;
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "0x%04X: EXECUTING SUB-SCRIPT %d\n", offset, sub);
+	BIOSLOG(pScrn, "0x%04X: Calling script %d\n", offset, sub);
 
 	parse_init_table(pScrn, bios,
 			 le16_to_cpu(*((uint16_t *)(&bios->data[bios->init_script_tbls_ptr + sub * 2]))),
 			 iexec);
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "0x%04X: END OF SUB-SCRIPT %d\n", offset, sub);
+	BIOSLOG(pScrn, "0x%04X: End of script %d\n", offset, sub);
 
 	return true;
 }
@@ -2137,16 +2041,12 @@ static bool init_ram_condition(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset,
 
 	data = nv32_rd(pScrn, NV_PFB_BOOT_0) & mask;
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "0x%04X: Checking if 0x%08X equals 0x%08X\n", offset, data, cmpval);
+	BIOSLOG(pScrn, "0x%04X: Checking if 0x%08X equals 0x%08X\n", offset, data, cmpval);
 
 	if (data == cmpval)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: CONDITION FULFILLED - CONTINUING TO EXECUTE\n", offset);
+		BIOSLOG(pScrn, "0x%04X: Condition fulfilled -- continuing to execute\n", offset);
 	else {
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "0x%04X: CONDITION IS NOT FULFILLED\n", offset);
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ------ SKIPPING FOLLOWING COMMANDS ------\n", offset);
+		BIOSLOG(pScrn, "0x%04X: Condition not fulfilled -- skipping following commands\n", offset);
 		iexec->execute = false;
 	}
 
@@ -2172,10 +2072,7 @@ static bool init_nv_reg(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_e
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%08X, Mask: 0x%08X, Data: 0x%08X\n",
-			   offset, reg, mask, data);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%08X, Mask: 0x%08X, Data: 0x%08X\n", offset, reg, mask, data);
 
 	nv32_wr(pScrn, reg, (nv32_rd(pScrn, reg) & mask) | data);
 
@@ -2206,10 +2103,8 @@ static bool init_macro(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_ex
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Macro: 0x%02X, MacroTableIndex: 0x%02X, Count: 0x%02X\n",
-			   offset, macro_index_tbl_idx, macro_tbl_idx, count);
+	BIOSLOG(pScrn, "0x%04X: Macro: 0x%02X, MacroTableIndex: 0x%02X, Count: 0x%02X\n",
+		offset, macro_index_tbl_idx, macro_tbl_idx, count);
 
 	for (i = 0; i < count; i++) {
 		uint16_t macroentryptr = bios->macro_tbl_ptr + (macro_tbl_idx + i) * MACRO_SIZE;
@@ -2249,8 +2144,7 @@ static bool init_resume(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_e
 		return true;
 
 	iexec->execute = true;
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "0x%04X: ---- EXECUTING FOLLOWING COMMANDS ----\n", offset);
+	BIOSLOG(pScrn, "0x%04X: ---- Executing following commands ----\n", offset);
 
 	return true;
 }
@@ -2308,11 +2202,9 @@ static bool init_time(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exe
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Sleeping for 0x%04X microseconds\n", offset, time);
+	BIOSLOG(pScrn, "0x%04X: Sleeping for 0x%04X microseconds\n", offset, time);
 
-	usleep(time);
+	BIOS_USLEEP(time);
 
 	return true;
 }
@@ -2341,28 +2233,17 @@ static bool init_condition(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, ini
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Cond: 0x%02X, Reg: 0x%08X, Mask: 0x%08X, Cmpval: 0x%08X\n",
-			   offset, cond, reg, mask, cmpval);
+	BIOSLOG(pScrn, "0x%04X: Cond: 0x%02X, Reg: 0x%08X, Mask: 0x%08X, Cmpval: 0x%08X\n",
+		offset, cond, reg, mask, cmpval);
 
 	data = nv32_rd(pScrn, reg) & mask;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Checking if 0x%08X equals 0x%08X\n",
-			   offset, data, cmpval);
+	BIOSLOG(pScrn, "0x%04X: Checking if 0x%08X equals 0x%08X\n", offset, data, cmpval);
 
-	if (data == cmpval) {
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: CONDITION FULFILLED - CONTINUING TO EXECUTE\n", offset);
-	} else {
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: CONDITION IS NOT FULFILLED\n", offset);
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ------ SKIPPING FOLLOWING COMMANDS  ------\n", offset);
+	if (data == cmpval)
+		BIOSLOG(pScrn, "0x%04X: Condition fulfilled -- continuing to execute\n", offset);
+	else {
+		BIOSLOG(pScrn, "0x%04X: Condition not fulfilled -- skipping following commands\n", offset);
 		iexec->execute = false;
 	}
 
@@ -2391,10 +2272,8 @@ static bool init_index_io(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Data: 0x%02X\n",
-			   offset, crtcport, crtcindex, mask, data);
+	BIOSLOG(pScrn, "0x%04X: Port: 0x%04X, Index: 0x%02X, Mask: 0x%02X, Data: 0x%02X\n",
+		offset, crtcport, crtcindex, mask, data);
 
 	value = (nv_idx_port_rd(pScrn, crtcport, crtcindex) & mask) | data;
 	nv_idx_port_wr(pScrn, crtcport, crtcindex, value);
@@ -2419,10 +2298,7 @@ static bool init_pll(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec
 	if (!iexec->execute)
 		return true;
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%08X, Freq: %d0kHz\n",
-			   offset, reg, freq);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%08X, Freq: %d0kHz\n", offset, reg, freq);
 
 	setPLL(pScrn, bios, reg, freq * 10);
 
@@ -2512,10 +2388,8 @@ static bool init_8e(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec_
 			data = (entry >> 19);
 		data = ((data & 3) ^ 2) << shift;
 
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: Entry: 0x%08X, Reg: 0x%08X, Shift: 0x%02X, Mask: 0x%08X, Data: 0x%08X\n",
-				   offset, entry, reg, shift, mask, data);
+		BIOSLOG(pScrn, "0x%04X: Entry: 0x%08X, Reg: 0x%08X, Shift: 0x%02X, Mask: 0x%08X, Data: 0x%08X\n",
+			offset, entry, reg, shift, mask, data);
 
 		nv32_wr(pScrn, reg, (nv32_rd(pScrn, reg) & mask) | data);
 
@@ -2531,10 +2405,8 @@ static bool init_8e(ScrnInfoPtr pScrn, bios_t *bios, uint16_t offset, init_exec_
 			data |= 0x10000;
 		data <<= shift;
 
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "0x%04X: Entry: 0x%08X, Reg: 0x%08X, Shift: 0x%02X, Mask: 0x%08X, Data: 0x%08X\n",
-				   offset, entry, reg, shift, mask, data);
+		BIOSLOG(pScrn, "0x%04X: Entry: 0x%08X, Reg: 0x%08X, Shift: 0x%02X, Mask: 0x%08X, Data: 0x%08X\n",
+			offset, entry, reg, shift, mask, data);
 
 		nv32_wr(pScrn, reg, (nv32_rd(pScrn, reg) & mask) | data);
 	}
@@ -2587,10 +2459,8 @@ static bool init_ram_restrict_zm_reg_group(ScrnInfoPtr pScrn, bios_t *bios, uint
 	strap_ramcfg = (nv32_rd(pScrn, NV_PEXTDEV_BOOT_0) >> 2) & 0xf;
 	index = bios->data[bios->ram_restrict_tbl_ptr + strap_ramcfg];
 
-	if (DEBUGLEVEL >= 6)
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Reg: 0x%08X, RegIncrement: 0x%02X, Count: 0x%02X, StrapRamCfg: 0x%02X, Index: 0x%02X\n",
-			   offset, reg, regincrement, count, strap_ramcfg, index);
+	BIOSLOG(pScrn, "0x%04X: Reg: 0x%08X, RegIncrement: 0x%02X, Count: 0x%02X, StrapRamCfg: 0x%02X, Index: 0x%02X\n",
+		offset, reg, regincrement, count, strap_ramcfg, index);
 
 	for (i = 0; i < count; i++) {
 		data = le32_to_cpu(*((uint32_t *)(&bios->data[offset + 7 + index * 4 + blocklen * i])));
@@ -2752,8 +2622,8 @@ static void parse_init_table(ScrnInfoPtr pScrn, bios_t *bios, unsigned int offse
 			;
 
 		if (itbl_entry[i].name) {
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO, "0x%04X: [ (0x%02X) - %s ]\n",
-				   offset, itbl_entry[i].id, itbl_entry[i].name);
+			BIOSLOG(pScrn, "0x%04X: [ (0x%02X) - %s ]\n",
+				offset, itbl_entry[i].id, itbl_entry[i].name);
 
 			/* execute eventual command handler */
 			if (itbl_entry[i].handler)
@@ -2782,10 +2652,9 @@ static void parse_init_tables(ScrnInfoPtr pScrn, bios_t *bios)
 	init_exec_t iexec = {true, false};
 
 	while ((table = le16_to_cpu(*((uint16_t *)(&bios->data[bios->init_script_tbls_ptr + i]))))) {
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: Parsing init table %d\n", table, i / 2);
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "0x%04X: ------ EXECUTING FOLLOWING COMMANDS ------\n", table);
+		xf86DrvMsg(pScrn->scrnIndex, X_PROBED,
+			   "Parsing VBIOS init table %d at offset 0x%04X\n", i / 2, table);
+		BIOSLOG(pScrn, "0x%04X: ------ Executing following commands ------\n", table);
 
 		parse_init_table(pScrn, bios, table, &iexec);
 		i += 2;
@@ -2849,10 +2718,9 @@ static void rundigitaloutscript(ScrnInfoPtr pScrn, uint16_t scriptptr, struct dc
 	init_exec_t iexec = {true, false};
 
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "0x%04X: Parsing digital output script table\n", scriptptr);
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_OWNER,
-		       head ? NV_VGA_CRTCX_OWNER_HEADB : NV_VGA_CRTCX_OWNER_HEADA);
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_57, 0);
-	nv_idx_port_wr(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_58, dcbent->index);
+	nv_idx_port_wr(pScrn, NV_CIO_CRX__COLOR, NV_CIO_CRE_44,
+		       head ? NV_CIO_CRE_44_HEADB : NV_CIO_CRE_44_HEADA);
+	NVWriteVgaCrtc5758(NVPTR(pScrn), head, 0, dcbent->index);
 	parse_init_table(pScrn, bios, scriptptr, &iexec);
 
 	link_head_and_output(pScrn, dcbent, head);
@@ -2872,7 +2740,7 @@ static void call_lvds_manufacturer_script(ScrnInfoPtr pScrn, struct dcb_entry *d
 
 	if (script == LVDS_PANEL_OFF)
 		/* off-on delay in ms */
-		usleep(le16_to_cpu(*(uint16_t *)&bios->data[bios->fp.xlated_entry + 7]));
+		BIOS_USLEEP(le16_to_cpu(*(uint16_t *)&bios->data[bios->fp.xlated_entry + 7]));
 #ifdef __powerpc__
 	/* Powerbook specific quirks */
 	if (script == LVDS_RESET && ((pNv->Chipset & 0xffff) == 0x0179 || (pNv->Chipset & 0xffff) == 0x0329))
@@ -3197,7 +3065,6 @@ static void parse_fp_mode_table(ScrnInfoPtr pScrn, bios_t *bios, struct fppointe
 	 * bytes 38-39 relate to spread spectrum settings
 	 * bytes 40-43 are something to do with PWM */
 
-	mode->prev = mode->next = NULL;
 	mode->status = MODE_OK;
 	mode->type = M_T_DRIVER | M_T_PREFERRED;
 	xf86SetModeDefaultName(mode);
@@ -3438,13 +3305,8 @@ bool get_pll_limits(ScrnInfoPtr pScrn, uint32_t limit_match, struct pll_lims *pl
 			xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Pointer to PLL limits table invalid\n");
 			return false;
 		}
-	} else {
+	} else
 		pll_lim_ver = bios->data[bios->pll_limit_tbl_ptr];
-
-		if (DEBUGLEVEL >= 7)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "Found PLL limits table version 0x%X\n", pll_lim_ver);
-	}
 
 	crystal_strap_mask = 1 << 6;
         /* open coded pNv->twoHeads test */
@@ -3473,7 +3335,7 @@ bool get_pll_limits(ScrnInfoPtr pScrn, uint32_t limit_match, struct pll_lims *pl
 		break;
 	default:
 		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-			   "PLL limits table revision not currently supported\n");
+			   "PLL limits table revision 0x%X not currently supported\n", pll_lim_ver);
 		return false;
 	}
 
@@ -3545,9 +3407,7 @@ bool get_pll_limits(ScrnInfoPtr pScrn, uint32_t limit_match, struct pll_lims *pl
 
 		plloffs += recordlen * pllindex;
 
-		if (DEBUGLEVEL >= 6)
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Loading PLL limits for reg 0x%08x\n",
-				   pllindex ? reg : 0);
+		BIOSLOG(pScrn, "Loading PLL limits for reg 0x%08x\n", pllindex ? reg : 0);
 
 		/* frequencies are stored in tables in MHz, kHz are more useful, so we convert */
 
@@ -3591,7 +3451,7 @@ bool get_pll_limits(ScrnInfoPtr pScrn, uint32_t limit_match, struct pll_lims *pl
 
 			if (((limit_match == NV_RAMDAC_VPLL || limit_match == VPLL1) && sel_clk & 0x20) ||
 			    ((limit_match == NV_RAMDAC_VPLL2 || limit_match == VPLL2) && sel_clk & 0x80)) {
-				if (nv_idx_port_rd(pScrn, CRTC_INDEX_COLOR, NV_VGA_CRTCX_REVISION) < 0xa3)
+				if (nv_idx_port_rd(pScrn, NV_CIO_CRX__COLOR, NV_CIO_CRE_CHIP_ID_INDEX) < 0xa3)
 					pll_lim->refclk = 200000;
 				else
 					pll_lim->refclk = 25000;
@@ -3695,14 +3555,13 @@ static int parse_bit_display_tbl_entry(ScrnInfoPtr pScrn, bios_t *bios, bit_entr
 	 * offset + 2  (16 bits): mode table pointer
 	 */
 
-	struct fppointers fpp;
+	struct fppointers fpp = { 0 };
 
 	if (bitentry->length != 4) {
 		xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Do not understand BIT display table\n");
 		return 0;
 	}
 
-	memset(&fpp, 0, sizeof(struct fppointers));
 	fpp.fptablepointer = le16_to_cpu(*((uint16_t *)(&bios->data[bitentry->offset + 2])));
 
 	parse_fp_mode_table(pScrn, bios, &fpp);
@@ -3756,7 +3615,7 @@ static int parse_bit_i_tbl_entry(ScrnInfoPtr pScrn, bios_t *bios, bit_entry_t *b
 	uint8_t dacversion, dacheaderlen;
 
 	if (bitentry->length < 6) {
-		xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
 			   "BIT i table not long enough for BIOS version and feature byte\n");
 		return 0;
 	}
@@ -3790,9 +3649,7 @@ static int parse_bit_i_tbl_entry(ScrnInfoPtr pScrn, bios_t *bios, bit_entry_t *b
 			   "DAC load detection comparison table version %d.%d not known\n",
 			   dacversion >> 4, dacversion & 0xf);
 		return 0;
-	} else
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "DAC load detection comparison table version %x found\n", dacversion);
+	}
 
 	bios->dactestval = le32_to_cpu(*((uint32_t *)(&bios->data[daccmpoffset + dacheaderlen])));
 
@@ -3884,8 +3741,12 @@ static int parse_bit_tmds_tbl_entry(ScrnInfoPtr pScrn, bios_t *bios, bit_entry_t
 		return 0;
 	}
 
-	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found TMDS table revision %d.%d\n",
-		   bios->data[tmdstableptr] >> 4, bios->data[tmdstableptr] & 0xf);
+	/* nv50+ has v2.0, but we don't parse it atm */
+	if (bios->data[tmdstableptr] != 0x11) {
+		xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "TMDS table revision %d.%d not currently supported\n",
+			   bios->data[tmdstableptr] >> 4, bios->data[tmdstableptr] & 0xf);
+		return 0;
+	}
 
 	/* These two scripts are odd: they don't seem to get run even when they are not stubbed */
 	script1 = le16_to_cpu(*((uint16_t *)&bios->data[tmdstableptr + 7]));
@@ -3987,16 +3848,14 @@ static void parse_bmp_structure(ScrnInfoPtr pScrn, bios_t *bios, unsigned int of
 	NVPtr pNv = NVPTR(pScrn);
 	uint8_t bmp_version_major, bmp_version_minor;
 	uint16_t bmplength;
-	struct fppointers fpp;
+	struct fppointers fpp = { 0 };
 	uint16_t legacy_scripts_offset, legacy_i2c_offset;
 
-	memset(&fpp, 0, sizeof(struct fppointers));
-
 	/* load needed defaults in case we can't parse this info */
-	pNv->dcb_table.i2c_write[0] = 0x3f;
-	pNv->dcb_table.i2c_read[0] = 0x3e;
-	pNv->dcb_table.i2c_write[1] = 0x37;
-	pNv->dcb_table.i2c_read[1] = 0x36;
+	pNv->dcb_table.i2c_write[0] = NV_CIO_CRE_DDC_WR__INDEX;
+	pNv->dcb_table.i2c_read[0] = NV_CIO_CRE_DDC_STATUS__INDEX;
+	pNv->dcb_table.i2c_write[1] = NV_CIO_CRE_DDC0_WR__INDEX;
+	pNv->dcb_table.i2c_read[1] = NV_CIO_CRE_DDC0_STATUS__INDEX;
 	bios->digital_min_front_porch = 0x4b;
 	bios->fmaxvco = 256000;
 	bios->fminvco = 128000;
@@ -4050,7 +3909,7 @@ static void parse_bmp_structure(ScrnInfoPtr pScrn, bios_t *bios, unsigned int of
 
 	/* checksum */
 	if (nv_cksum(bios->data + offset, 8)) {
-		xf86DrvMsg(pScrn->scrnIndex, X_WARNING, "Bad BMP checksum\n");
+		xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "Bad BMP checksum\n");
 		return;
 	}
 
@@ -4327,8 +4186,8 @@ parse_dcb_entry(ScrnInfoPtr pScrn, int index, uint8_t dcb_version, uint16_t i2ct
 			memcpy(&entry[1], &entry[0], sizeof(struct dcb_entry));
 			entry[1].index = ++index;
 			entry[1].type = OUTPUT_ANALOG;
-			ErrorF("Concocting additional DCB entry for analogue "
-			       "encoder on DVI output\n");
+			xf86DrvMsg(pScrn->scrnIndex, X_NOTICE,
+				   "Concocting additional DCB entry for analogue encoder on DVI output\n");
 			pNv->dcb_table.entries++;
 		}
 		read_dcb_i2c_entry(pScrn, dcb_version, i2ctabptr, entry->i2c_index);
@@ -4341,7 +4200,7 @@ parse_dcb_entry(ScrnInfoPtr pScrn, int index, uint8_t dcb_version, uint16_t i2ct
 		 */
 		entry->i2c_index = pNv->VBIOS.legacy.i2c_indices.crt;
 	} else { /* pre DCB / v1.1 - use the safe defaults for a crt */
-		xf86DrvMsg(pScrn->scrnIndex, X_WARNING,
+		xf86DrvMsg(pScrn->scrnIndex, X_NOTICE,
 			   "No information in BIOS output table; assuming a CRT output exists\n");
 		entry->i2c_index = pNv->VBIOS.legacy.i2c_indices.crt;
 	}
@@ -4424,7 +4283,7 @@ static unsigned int parse_dcb_table(ScrnInfoPtr pScrn, bios_t *bios)
 	/* get DCB version */
 	dcb_version = dcbtable[0];
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-		   "Display Configuration Block version %d.%d found\n",
+		   "Found Display Configuration Block version %d.%d\n",
 		   dcb_version >> 4, dcb_version & 0xf);
 
 	if (dcb_version >= 0x20) { /* NV17+ */
@@ -4436,10 +4295,6 @@ static unsigned int parse_dcb_table(ScrnInfoPtr pScrn, bios_t *bios)
 			recordlength = dcbtable[3];
 			i2ctabptr = le16_to_cpu(*(uint16_t *)&dcbtable[4]);
 			sig = le32_to_cpu(*(uint32_t *)&dcbtable[6]);
-
-			xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-				   "DCB header length %d, with %d possible entries\n",
-				   headerlen, entries);
 		} else {
 			i2ctabptr = le16_to_cpu(*(uint16_t *)&dcbtable[2]);
 			sig = le32_to_cpu(*(uint32_t *)&dcbtable[4]);
@@ -4452,9 +4307,8 @@ static unsigned int parse_dcb_table(ScrnInfoPtr pScrn, bios_t *bios)
 			return 0;
 		}
 	} else if (dcb_version >= 0x14) { /* some NV15/16, and NV11+ */
-		char sig[8];
+		char sig[8] = { 0 };
 
-		memset(sig, 0, 8);
 		strncpy(sig, (char *)&dcbtable[-7], 7);
 		i2ctabptr = le16_to_cpu(*(uint16_t *)&dcbtable[2]);
 		recordlength = 10;
@@ -4490,8 +4344,9 @@ static unsigned int parse_dcb_table(ScrnInfoPtr pScrn, bios_t *bios)
 		if (connection == 0x00000000) /* seen on an NV11 with DCB v1.5 */
 			break;
 
-		ErrorF("Raw DCB entry %d: %08x %08x\n",
-		       pNv->dcb_table.entries, connection, config);
+		xf86DrvMsg(pScrn->scrnIndex, X_NOTICE, "Raw DCB entry %d: %08x %08x\n",
+			   pNv->dcb_table.entries, connection, config);
+
 		if (!parse_dcb_entry(pScrn, pNv->dcb_table.entries, dcb_version, i2ctabptr, connection, config))
 			break;
 	}
@@ -4569,7 +4424,8 @@ static void read_bios_edid(ScrnInfoPtr pScrn)
 
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Found EDID in BIOS\n");
 
-	bios->fp.edid = xalloc(EDID1_LEN);
+	if (!(bios->fp.edid = xalloc(EDID1_LEN)))
+		return;
 	for (i = 0; i < EDID1_LEN; i++)
 		bios->fp.edid[i] = bios->data[offset + i];
 }
@@ -4579,11 +4435,10 @@ bool NVInitVBIOS(ScrnInfoPtr pScrn)
 	NVPtr pNv = NVPTR(pScrn);
 
 	memset(&pNv->VBIOS, 0, sizeof(bios_t));
-	pNv->VBIOS.data = xalloc(NV_PROM_SIZE);
+	if (!(pNv->VBIOS.data = xalloc(NV_PROM_SIZE)))
+		return false;
 
 	if (!NVShadowVBIOS(pScrn, pNv->VBIOS.data)) {
-		xf86DrvMsg(pScrn->scrnIndex, X_ERROR,
-			   "No valid BIOS image found\n");
 		xfree(pNv->VBIOS.data);
 		return false;
 	}
@@ -4602,7 +4457,9 @@ bool NVRunVBIOSInit(ScrnInfoPtr pScrn)
 	const uint8_t bit_signature[] = { 0xff, 0xb8, 'B', 'I', 'T' };
 	int offset, ret = 0;
 
-	crtc_access(pScrn, ACCESS_UNLOCK);
+	NVLockVgaCrtcs(pNv, false);
+	if (pNv->twoHeads)
+		NVSetOwner(pNv, crtchead);
 
 	if ((offset = findstr(pNv->VBIOS.data, pNv->VBIOS.length, bit_signature, sizeof(bit_signature)))) {
 		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "BIT BIOS found\n");
@@ -4623,7 +4480,9 @@ bool NVRunVBIOSInit(ScrnInfoPtr pScrn)
 		ret = 1;
 	}
 
-	crtc_access(pScrn, ACCESS_LOCK);
+	NVLockVgaCrtcs(pNv, true);
+	if (pNv->twoHeads)
+		NVSetOwner(pNv, crtchead);
 
 	if (ret)
 		return false;
@@ -4652,9 +4511,7 @@ unsigned int NVParseBios(ScrnInfoPtr pScrn)
 	if (!NVRunVBIOSInit(pScrn))
 		return 0;
 
-	if (parse_dcb_table(pScrn, &pNv->VBIOS))
-		xf86DrvMsg(pScrn->scrnIndex, X_INFO,
-			   "Found %d entries in DCB\n", pNv->dcb_table.entries);
+	parse_dcb_table(pScrn, &pNv->VBIOS);
 
 	for (i = 0 ; i < pNv->dcb_table.entries; i++)
 		if (pNv->dcb_table.entry[i].type == OUTPUT_LVDS)

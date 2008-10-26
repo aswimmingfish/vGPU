@@ -264,39 +264,6 @@ static XF86ModuleVersionInfo nouveauVersRec =
 
 _X_EXPORT XF86ModuleData nouveauModuleData = { &nouveauVersRec, nouveauSetup, NULL };
 
-static Bool
-NVGetRec(ScrnInfoPtr pScrn)
-{
-    /*
-     * Allocate an NVRec, and hook it into pScrn->driverPrivate.
-     * pScrn->driverPrivate is initialised to NULL, so we can check if
-     * the allocation has already been done.
-     */
-    if (pScrn->driverPrivate != NULL)
-        return TRUE;
-
-    pScrn->driverPrivate = xnfcalloc(sizeof(NVRec), 1);
-    /* Initialise it */
-
-    return TRUE;
-}
-
-static void
-NVFreeRec(ScrnInfoPtr pScrn)
-{
-	if (pScrn->driverPrivate == NULL)
-		return;
-	NVPtr pNv = NVPTR(pScrn);
-	if (pNv->Architecture == NV_ARCH_50 && !pNv->kms_enable) {
-		NV50ConnectorDestroy(pScrn);
-		NV50OutputDestroy(pScrn);
-		NV50CrtcDestroy(pScrn);
-	}
-	xfree(pScrn->driverPrivate);
-	pScrn->driverPrivate = NULL;
-}
-
-
 static pointer
 nouveauSetup(pointer module, pointer opts, int *errmaj, int *errmin)
 {
@@ -711,10 +678,7 @@ NVEnterVT(int scrnIndex, int flags)
 			}
 
 			/* Save the current state */
-			if (pNv->SaveGeneration != serverGeneration) {
-				pNv->SaveGeneration = serverGeneration;
-				NVSave(pScrn);
-			}
+			NVSave(pScrn);
 
 			for (i = 0; i < xf86_config->num_crtc; i++) {
 				NVCrtcLockUnlock(xf86_config->crtc[i], 0);
@@ -722,6 +686,8 @@ NVEnterVT(int scrnIndex, int flags)
 
 			if (!xf86SetDesiredModes(pScrn))
 				return FALSE;
+
+			NVAccelCommonInit(pScrn);
 		} else {
 			if (!NVModeInit(pScrn, pScrn->currentMode))
 				return FALSE;
@@ -830,12 +796,14 @@ NVCloseScreen(int scrnIndex, ScreenPtr pScreen)
 		}
 	}
 
-	if (pNv->pInt10)
-		xf86FreeInt10(pNv->pInt10);
-
+	NVAccelFree(pNv);
 	NVUnmapMem(pScrn);
+	NVXvDMANotifiersRealFree();
+	nouveau_channel_free(&pNv->chan);
+
 	vgaHWUnmapMem(pScrn);
 	NVDRICloseScreen(pScrn);
+	xf86_cursors_fini(pScreen);
 	if (pNv->CursorInfoRec)
 		xf86DestroyCursorInfoRec(pNv->CursorInfoRec);
 	if (pNv->ShadowPtr) {
@@ -879,10 +847,29 @@ NVFreeScreen(int scrnIndex, int flags)
 	/*
 	 * This only gets called when a screen is being deleted.  It does not
 	 * get called routinely at the end of a server generation.
-	*/
+	 */
+
+	ScrnInfoPtr pScrn = xf86Screens[scrnIndex];
+	NVPtr pNv = NVPTR(pScrn);
+
 	if (xf86LoaderCheckSymbol("vgaHWFreeHWRec"))
 		vgaHWFreeHWRec(xf86Screens[scrnIndex]);
-	NVFreeRec(xf86Screens[scrnIndex]);
+
+	if (!pNv)
+		return;
+
+	if (pNv->Architecture == NV_ARCH_50 && !pNv->kms_enable) {
+		NV50ConnectorDestroy(pScrn);
+		NV50OutputDestroy(pScrn);
+		NV50CrtcDestroy(pScrn);
+	}
+
+	/* Free this here and not in CloseScreen, as it's needed after the first server generation. */
+	if (pNv->pInt10)
+		xf86FreeInt10(pNv->pInt10);
+
+	xfree(pScrn->driverPrivate);
+	pScrn->driverPrivate = NULL;
 }
 
 
@@ -970,9 +957,12 @@ static Bool NVPreInitDRI(ScrnInfoPtr pScrn)
 static Bool
 nv_xf86crtc_resize(ScrnInfoPtr pScrn, int width, int height)
 {
+#if 0
+	do not change virtual* for now, as it breaks multihead server regeneration
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "nv_xf86crtc_resize is called with %dx%d resolution.\n", width, height);
 	pScrn->virtualX = width;
 	pScrn->virtualY = height;
+#endif
 	return TRUE;
 }
 
@@ -982,9 +972,7 @@ static const xf86CrtcConfigFuncsRec nv_xf86crtc_config_funcs = {
 
 #define NVPreInitFail(fmt, args...) do {                                    \
 	xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "%d: "fmt, __LINE__, ##args); \
-	if (pNv->pInt10)                                                    \
-		xf86FreeInt10(pNv->pInt10);                                 \
-	NVFreeRec(pScrn);                                                   \
+	NVFreeScreen(pScrn->scrnIndex, 0);                                  \
 	return FALSE;                                                       \
 } while(0)
 
@@ -1034,9 +1022,8 @@ NVPreInit(ScrnInfoPtr pScrn, int flags)
 		return FALSE;
 
 	/* Allocate the NVRec driverPrivate */
-	if (!NVGetRec(pScrn)) {
+	if (!(pScrn->driverPrivate = xnfcalloc(1, sizeof(NVRec))))
 		return FALSE;
-	}
 	pNv = NVPTR(pScrn);
 
 	/* Get the entity, and make sure it is PCI. */
@@ -1664,12 +1651,19 @@ NVUnmapMem(ScrnInfoPtr pScrn)
 {
 	NVPtr pNv = NVPTR(pScrn);
 
+	nouveau_bo_ref(NULL, &pNv->xv_filtertable_mem);
+	if (pNv->blitAdaptor)
+		NVFreePortMemory(pScrn, GET_BLIT_PRIVATE(pNv));
+	if (pNv->textureAdaptor[0])
+		NVFreePortMemory(pScrn, pNv->textureAdaptor[0]->pPortPrivates[0].ptr);
+	if (pNv->textureAdaptor[1])
+		NVFreePortMemory(pScrn, pNv->textureAdaptor[1]->pPortPrivates[0].ptr);
+
 	nouveau_bo_ref(NULL, &pNv->FB);
 	nouveau_bo_ref(NULL, &pNv->GART);
 	nouveau_bo_ref(NULL, &pNv->Cursor);
-	if (pNv->randr12_enable) {
+	if (pNv->randr12_enable)
 		nouveau_bo_ref(NULL, &pNv->Cursor2);
-	}
 	nouveau_bo_ref(NULL, &pNv->CLUT0);
 	nouveau_bo_ref(NULL, &pNv->CLUT1);
 
@@ -1702,7 +1696,7 @@ NVModeInit(ScrnInfoPtr pScrn, DisplayModePtr mode)
 
     NVLockUnlock(pScrn, 0);
     if(pNv->twoHeads) {
-        nvWriteCurVGA(pNv, NV_VGA_CRTCX_OWNER, nvReg->crtcOwner);
+        nvWriteCurVGA(pNv, NV_CIO_CRE_44, nvReg->crtcOwner);
         NVLockUnlock(pScrn, 0);
     }
 
@@ -1716,9 +1710,9 @@ NVModeInit(ScrnInfoPtr pScrn, DisplayModePtr mode)
     {
 	unsigned char tmp;
 
-	tmp = nvReadCurVGA(pNv, NV_VGA_CRTCX_SWAPPING);
+	tmp = nvReadCurVGA(pNv, NV_CIO_CRE_RCR);
 	tmp |= (1 << 7);
-	nvWriteCurVGA(pNv, NV_VGA_CRTCX_SWAPPING, tmp);
+	nvWriteCurVGA(pNv, NV_CIO_CRE_RCR, tmp);
     }
 #endif
 
@@ -1747,9 +1741,11 @@ NVRestore(ScrnInfoPtr pScrn)
 		for (i = 0; i < xf86_config->num_crtc; i++)
 			NVCrtcLockUnlock(xf86_config->crtc[i], 0);
 
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Restoring encoders\n");
 		for (i = 0; i < pNv->dcb_table.entries; i++)
 			nv_encoder_restore(pScrn, &pNv->encoders[i]);
 
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Restoring crtcs\n");
 		for (i = 0; i < xf86_config->num_crtc; i++)
 			xf86_config->crtc[i]->funcs->restore(xf86_config->crtc[i]);
 
@@ -1765,7 +1761,7 @@ NVRestore(ScrnInfoPtr pScrn)
 		NVLockUnlock(pScrn, 0);
 
 		if(pNv->twoHeads) {
-			nvWriteCurVGA(pNv, NV_VGA_CRTCX_OWNER, pNv->crtc_active[1] * 0x3);
+			nvWriteCurVGA(pNv, NV_CIO_CRE_44, pNv->crtc_active[1] * 0x3);
 			NVLockUnlock(pScrn, 0);
 		}
 
@@ -1776,10 +1772,9 @@ NVRestore(ScrnInfoPtr pScrn)
 	}
 
 	if (pNv->twoHeads) {
-		NVSetOwner(pScrn, 0);	/* move to head A to set owner */
 		NVLockVgaCrtc(pNv, 0, false);
 		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Restoring CRTC_OWNER to %d.\n", pNv->vtOWNER);
-		NVWriteVgaCrtc(pNv, 0, NV_VGA_CRTCX_OWNER, pNv->vtOWNER);
+		NVSetOwner(pNv, pNv->vtOWNER);
 		NVLockVgaCrtc(pNv, 0, true);
 	}
 }
@@ -1939,21 +1934,13 @@ NVDPMSSet(ScrnInfoPtr pScrn, int PowerManagementMode, int flags)
 static Bool
 NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 {
-	ScrnInfoPtr pScrn;
-	vgaHWPtr hwp;
-	NVPtr pNv;
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	vgaHWPtr hwp = VGAHWPTR(pScrn);
+	NVPtr pNv = NVPTR(pScrn);
 	int ret;
 	VisualPtr visual;
 	unsigned char *FBStart;
 	int displayWidth;
-
-	/* 
-	 * First get the ScrnInfoRec
-	 */
-	pScrn = xf86Screens[pScreen->myNum];
-
-	hwp = VGAHWPTR(pScrn);
-	pNv = NVPTR(pScrn);
 
 	/* Map the VGA memory when the primary video */
 	if (pNv->Primary) {
@@ -2009,6 +1996,15 @@ NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 		NVSaveScreen(pScreen, SCREEN_SAVER_ON);
 		pScrn->AdjustFrame(scrnIndex, pScrn->frameX0, pScrn->frameY0, 0);
 	} else {
+		xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+		int i;
+
+		/* need to point to new screen on server regeneration */
+		for (i = 0; i < xf86_config->num_crtc; i++)
+			xf86_config->crtc[i]->scrn = pScrn;
+		for (i = 0; i < xf86_config->num_output; i++)
+			xf86_config->output[i]->scrn = pScrn;
+
 		pScrn->memPhysBase = pNv->VRAMPhysical;
 		pScrn->fbOffset = 0;
 
@@ -2099,7 +2095,6 @@ NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 	if (!pNv->NoAccel) {
 		if (!NVExaInit(pScreen))
 			return FALSE;
-		NVAccelCommonInit(pScrn);
 	} else if (pNv->VRAMPhysicalSize / 2 < NOUVEAU_ALIGN(pScrn->virtualX, 64) * NOUVEAU_ALIGN(pScrn->virtualY, 64) * (pScrn->bitsPerPixel >> 3)) {
 		xf86DrvMsg(pScrn->scrnIndex, X_ERROR, "The virtual screen size's resolution is too big for the video RAM framebuffer at this colour depth.\n");
 		return FALSE;
@@ -2198,27 +2193,26 @@ NVScreenInit(int scrnIndex, ScreenPtr pScreen, int argc, char **argv)
 static Bool
 NVSaveScreen(ScreenPtr pScreen, int mode)
 {
-    ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
-    NVPtr pNv = NVPTR(pScrn);
-    int i;
-    Bool on = xf86IsUnblank(mode);
-    
-    if (pNv->randr12_enable) {
-    	xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
-	if (pScrn->vtSema && pNv->Architecture < NV_ARCH_50) {
-	    for (i = 0; i < xf86_config->num_crtc; i++) {
-		
-		if (xf86_config->crtc[i]->enabled) {
-		    struct nouveau_crtc *nv_crtc = to_nouveau_crtc(xf86_config->crtc[i]);
-		    NVBlankScreen(pScrn, nv_crtc->head, !on);
-		}
-	    }
-	    
-	}
-	return TRUE;
-    }
+	ScrnInfoPtr pScrn = xf86Screens[pScreen->myNum];
+	NVPtr pNv = NVPTR(pScrn);
+	bool on = xf86IsUnblank(mode);
+	int i;
 
-	return vgaHWSaveScreen(pScreen, mode);
+	if (!pNv->randr12_enable)
+		return vgaHWSaveScreen(pScreen, mode);
+
+	if (pScrn->vtSema && pNv->Architecture < NV_ARCH_50) {
+		xf86CrtcConfigPtr xf86_config = XF86_CRTC_CONFIG_PTR(pScrn);
+
+		for (i = 0; i < xf86_config->num_crtc; i++) {
+			struct nouveau_crtc *nv_crtc = to_nouveau_crtc(xf86_config->crtc[i]);
+
+			if (xf86_config->crtc[i]->enabled)
+				NVBlankScreen(pNv, nv_crtc->head, !on);
+		}
+	}
+
+	return TRUE;
 }
 
 static void
@@ -2233,9 +2227,11 @@ NVSave(ScrnInfoPtr pScrn)
 
 		nv_save_restore_vga_fonts(pScrn, 1);
 
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Saving crtcs\n");
 		for (i = 0; i < xf86_config->num_crtc; i++)
 			xf86_config->crtc[i]->funcs->save(xf86_config->crtc[i]);
 
+		xf86DrvMsg(pScrn->scrnIndex, X_INFO, "Saving encoders\n");
 		for (i = 0; i < pNv->dcb_table.entries; i++)
 			nv_encoder_save(pScrn, &pNv->encoders[i]);
 	} else {
@@ -2243,7 +2239,7 @@ NVSave(ScrnInfoPtr pScrn)
 		vgaRegPtr vgaReg = &pVga->SavedReg;
 		NVLockUnlock(pScrn, 0);
 		if (pNv->twoHeads) {
-			nvWriteCurVGA(pNv, NV_VGA_CRTCX_OWNER, pNv->crtc_active[1] * 0x3);
+			nvWriteCurVGA(pNv, NV_CIO_CRE_44, pNv->crtc_active[1] * 0x3);
 			NVLockUnlock(pScrn, 0);
 		}
 

@@ -147,7 +147,6 @@ typedef struct _nv_crtc_reg
 	uint8_t Attribute[21];
 	unsigned char DAC[768];       /* Internal Colorlookuptable */
 	uint32_t cursorConfig;
-	uint32_t crtcOwner;
 	uint32_t gpio;
 	uint32_t gpio_ext;
 	uint32_t unk830;
@@ -197,10 +196,10 @@ typedef struct _riva_hw_state
 	uint32_t fifo;
 	uint32_t pixel;
 	uint32_t horiz;
-	uint32_t arbitration0;
-	uint32_t arbitration1;
-	uint32_t pll;
-	uint32_t pllB;
+	uint8_t arbitration0;
+	uint16_t arbitration1;
+	CARD32 pll;
+	CARD32 pllB;
 	uint32_t vpll;
 	uint32_t vpll2;
 	uint32_t vpllB;
@@ -250,6 +249,7 @@ struct nouveau_connector {
 	xf86MonPtr edid;
 	I2CBusPtr pDDCBus;
 	uint16_t possible_encoders;
+	struct nouveau_encoder *detected_encoder;
 	struct nouveau_encoder *nv_encoder;
 };
 
@@ -428,7 +428,6 @@ typedef struct _NVRec {
     volatile CARD8 *PDIO0;
     volatile CARD8 *PDIO1;
 
-    unsigned int SaveGeneration;
     uint8_t cur_head;
     ExaDriverPtr	EXADriverPtr;
     xf86CursorInfoPtr   CursorInfoRec;
@@ -526,15 +525,13 @@ typedef struct _NVRec {
 	struct nouveau_grobj *Nv2D;
 	struct nouveau_grobj *Nv3D;
 	struct nouveau_bo *tesla_scratch;
+	struct nouveau_bo *shader_mem;
+	struct nouveau_bo *xv_filtertable_mem;
 } NVRec;
 
 #define NVPTR(p) ((NVPtr)((p)->driverPrivate))
 
-#define NVShowHideCursor(pScrn, show) do {							\
-	NVPtr pNv = NVPTR(pScrn);										\
-	nv_crtc_show_hide_cursor(pScrn, pNv->cur_head, show);				\
-} while(0)
-
+#define NVShowHideCursor(pScrn, show) nv_show_cursor(NVPTR(pScrn), NVPTR(pScrn)->cur_head, show)
 #define NVLockUnlock(pScrn, lock) NVLockVgaCrtc(NVPTR(pScrn), NVPTR(pScrn)->cur_head, lock)
 
 #define nvReadCurVGA(pNv, reg) NVReadVgaCrtc(pNv, pNv->cur_head, reg)
