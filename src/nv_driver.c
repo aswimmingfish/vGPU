@@ -798,7 +798,6 @@ NVCloseScreen(int scrnIndex, ScreenPtr pScreen)
 
 	NVAccelFree(pNv);
 	NVUnmapMem(pScrn);
-	NVXvDMANotifiersRealFree();
 	nouveau_channel_free(&pNv->chan);
 
 	vgaHWUnmapMem(pScrn);
