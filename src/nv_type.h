@@ -603,7 +603,7 @@ typedef struct _NVPortPrivRec {
 
 #define TIMER_MASK      (OFF_TIMER | FREE_TIMER)
 
-#if 1
+#if 0
 #define NOUVEAU_FALLBACK(fmt,args...) do {        \
 	fprintf(stderr, "FALLBACK: "fmt, ##args); \
 	return FALSE;                             \
