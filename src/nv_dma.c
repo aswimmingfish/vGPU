@@ -63,6 +63,7 @@ NVInitDma(ScrnInfoPtr pScrn)
 			   "Error creating GPU channel: %d\n", ret);
 		return FALSE;
 	}
+	pNv->chan->user_private = pNv;
 
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO,
 		   "Opened GPU channel %d\n", pNv->chan->id);
