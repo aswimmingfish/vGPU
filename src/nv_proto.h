@@ -136,9 +136,9 @@ void NV50SyncToVBlank(PixmapPtr ppix, BoxPtr box);
 Bool NVAccelInitNV50TCL(ScrnInfoPtr pScrn);
 
 /* in nvc0_accel.c */
-Bool NVAccelInitNVC0TCL(ScrnInfoPtr pScrn);
 Bool NVAccelInitM2MF_NVC0(ScrnInfoPtr pScrn);
 Bool NVAccelInit2D_NVC0(ScrnInfoPtr pScrn);
+Bool NVAccelInit3D_NVC0(ScrnInfoPtr pScrn);
 
 /* in nv50_exa.c */
 Bool NV50EXAPrepareSolid(PixmapPtr, int, Pixel, Pixel);

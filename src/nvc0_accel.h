@@ -5,12 +5,11 @@
 #define BEGIN_RING_NI(c, g, m, s) BEGIN_RING_NI_NVC0(c, g, m, s)
 
 /* scratch buffer offsets */
-#define CODE_OFFSET 0x00000000 /* Code */
-#define TIC_OFFSET  0x00002000 /* Texture Image Control */
-#define TSC_OFFSET  0x00003000 /* Texture Sampler Control */
-
-#define NTFY_OFST 0x08000
-#define MISC_OFST 0x10000
+#define CODE_OFFSET 0x00000 /* Code */
+#define TIC_OFFSET  0x02000 /* Texture Image Control */
+#define TSC_OFFSET  0x03000 /* Texture Sampler Control */
+#define NTFY_OFFSET 0x08000
+#define MISC_OFFSET 0x01000
 
 /* fragment programs */
 #define PFP_S     0x0000 /* (src) */
@@ -28,26 +27,26 @@
 #define CB_OFFSET 0x1000
 
 #define VTX_ATTR(a, c, t, s)				\
-	((NVC0TCL_VTX_ATTR_DEFINE_TYPE_##t) |		\
-	 ((a) << NVC0TCL_VTX_ATTR_DEFINE_ATTR_SHIFT) |	\
-	 ((c) << NVC0TCL_VTX_ATTR_DEFINE_COMP_SHIFT) |	\
-	 ((s) << NVC0TCL_VTX_ATTR_DEFINE_SIZE_SHIFT))
+	((NVC0_3D_VTX_ATTR_DEFINE_TYPE_##t) |		\
+	 ((a) << NVC0_3D_VTX_ATTR_DEFINE_ATTR__SHIFT) |	\
+	 ((c) << NVC0_3D_VTX_ATTR_DEFINE_COMP__SHIFT) |	\
+	 ((s) << NVC0_3D_VTX_ATTR_DEFINE_SIZE__SHIFT))
 
 static __inline__ void
 VTX1s(NVPtr pNv, float sx, float sy, unsigned dx, unsigned dy)
 {
 	struct nouveau_channel *chan = pNv->chan;
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 3);
 	OUT_RING  (chan, VTX_ATTR(1, 2, FLOAT, 4));
 	OUT_RINGf (chan, sx);
 	OUT_RINGf (chan, sy);
 #if 1
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 2);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 2);
 	OUT_RING  (chan, VTX_ATTR(0, 2, USCALED, 2));
 	OUT_RING  (chan, (dy << 16) | dx);
 #else
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 3);
 	OUT_RING  (chan, VTX_ATTR(0, 2, FLOAT, 4));
 	OUT_RINGf (chan, (float)dx);
 	OUT_RINGf (chan, (float)dy);
@@ -60,20 +59,20 @@ VTX2s(NVPtr pNv, float s1x, float s1y, float s2x, float s2y,
 {
 	struct nouveau_channel *chan = pNv->chan;
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 3);
 	OUT_RING  (chan, VTX_ATTR(1, 2, FLOAT, 4));
 	OUT_RINGf (chan, s1x);
 	OUT_RINGf (chan, s1y);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 3);
 	OUT_RING  (chan, VTX_ATTR(2, 2, FLOAT, 4));
 	OUT_RINGf (chan, s2x);
 	OUT_RINGf (chan, s2y);
 #if 1
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 2);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 2);
 	OUT_RING  (chan, VTX_ATTR(0, 2, USCALED, 2));
 	OUT_RING  (chan, (dy << 16) | dx);
 #else
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VTX_ATTR_DEFINE, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VTX_ATTR_DEFINE, 3);
 	OUT_RING  (chan, VTX_ATTR(0, 2, FLOAT, 4));
 	OUT_RINGf (chan, (float)dx);
 	OUT_RINGf (chan, (float)dy);

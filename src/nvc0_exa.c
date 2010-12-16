@@ -220,7 +220,7 @@ static struct nvc0_exa_state exa_state;
 	struct nouveau_channel *chan = pNv->chan; (void)chan;          \
 	struct nvc0_exa_state *state = &exa_state; (void)state
 
-#define BF(f) NVC0TCL_BLEND_FUNC_SRC_RGB_##f
+#define BF(f) NV50_BLEND_FACTOR_##f
 
 struct nvc0_blend_op {
 	unsigned src_alpha;
@@ -647,26 +647,26 @@ NVC0EXARenderTarget(PixmapPtr ppix, PicturePtr ppict)
 		NOUVEAU_FALLBACK("pixmap is scanout buffer\n");
 
 	switch (ppict->format) {
-	case PICT_a8r8g8b8: format = NVC0TCL_RT_FORMAT_A8R8G8B8_UNORM; break;
-	case PICT_x8r8g8b8: format = NVC0TCL_RT_FORMAT_X8R8G8B8_UNORM; break;
-	case PICT_r5g6b5:   format = NVC0TCL_RT_FORMAT_R5G6B5_UNORM; break;
-	case PICT_a8:       format = NVC0TCL_RT_FORMAT_A8_UNORM; break;
-	case PICT_x1r5g5b5: format = NVC0TCL_RT_FORMAT_X1R5G5B5_UNORM; break;
-	case PICT_a1r5g5b5: format = NVC0TCL_RT_FORMAT_A1R5G5B5_UNORM; break;
-	case PICT_x8b8g8r8: format = NVC0TCL_RT_FORMAT_X8B8G8R8_UNORM; break;
+	case PICT_a8r8g8b8: format = NV50_SURFACE_FORMAT_A8R8G8B8_UNORM; break;
+	case PICT_x8r8g8b8: format = NV50_SURFACE_FORMAT_X8R8G8B8_UNORM; break;
+	case PICT_r5g6b5:   format = NV50_SURFACE_FORMAT_R5G6B5_UNORM; break;
+	case PICT_a8:       format = NV50_SURFACE_FORMAT_A8_UNORM; break;
+	case PICT_x1r5g5b5: format = NV50_SURFACE_FORMAT_X1R5G5B5_UNORM; break;
+	case PICT_a1r5g5b5: format = NV50_SURFACE_FORMAT_A1R5G5B5_UNORM; break;
+	case PICT_x8b8g8r8: format = NV50_SURFACE_FORMAT_X8B8G8R8_UNORM; break;
 	case PICT_a2b10g10r10:
 	case PICT_x2b10g10r10:
-		format = NVC0TCL_RT_FORMAT_A2B10G10R10_UNORM;
+		format = NV50_SURFACE_FORMAT_A2B10G10R10_UNORM;
 		break;
 	case PICT_a2r10g10b10:
 	case PICT_x2r10g10b10:
-		format = NVC0TCL_RT_FORMAT_A2R10G10B10_UNORM;
+		format = NV50_SURFACE_FORMAT_A2R10G10B10_UNORM;
 		break;
 	default:
 		NOUVEAU_FALLBACK("invalid picture format\n");
 	}
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_RT_ADDRESS_HIGH(0), 8);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_RT_ADDRESS_HIGH(0), 8);
 	if (OUT_RELOCh(chan, bo, 0, NOUVEAU_BO_VRAM | NOUVEAU_BO_WR) ||
 	    OUT_RELOCl(chan, bo, 0, NOUVEAU_BO_VRAM | NOUVEAU_BO_WR))
 		return FALSE;
@@ -759,7 +759,7 @@ NVC0EXATexture(PixmapPtr ppix, PicturePtr ppict, unsigned unit)
 	if (!nv50_style_tiled_pixmap(ppix))
 		NOUVEAU_FALLBACK("pixmap is scanout buffer\n");
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TIC_ADDRESS_HIGH, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TIC_ADDRESS_HIGH, 3);
 	if (OUT_RELOCh(chan, pNv->tesla_scratch, TIC_OFFSET, tcb_flags) ||
 	    OUT_RELOCl(chan, pNv->tesla_scratch, TIC_OFFSET, tcb_flags))
 		return FALSE;
@@ -858,7 +858,7 @@ NVC0EXATexture(PixmapPtr ppix, PicturePtr ppict, unsigned unit)
 	OUT_RING  (chan, 0x03000000);
 	OUT_RING  (chan, 0x00000000);
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TSC_ADDRESS_HIGH, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TSC_ADDRESS_HIGH, 3);
 	if (OUT_RELOCh(chan, pNv->tesla_scratch, TSC_OFFSET, tcb_flags) ||
 	    OUT_RELOCl(chan, pNv->tesla_scratch, TSC_OFFSET, tcb_flags))
 		return FALSE;
@@ -962,18 +962,18 @@ NVC0EXABlend(PixmapPtr ppix, PicturePtr ppict, int op, int component_alpha)
 	}
 
 	if (sblend == BF(ONE) && dblend == BF(ZERO)) {
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_BLEND_ENABLE(0), 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_BLEND_ENABLE(0), 1);
 		OUT_RING  (chan, 0);
 	} else {
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_BLEND_ENABLE(0), 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_BLEND_ENABLE(0), 1);
 		OUT_RING  (chan, 1);
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_BLEND_EQUATION_RGB, 5);
-		OUT_RING  (chan, NVC0TCL_BLEND_EQUATION_RGB_FUNC_ADD);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_BLEND_EQUATION_RGB, 5);
+		OUT_RING  (chan, NVC0_3D_BLEND_EQUATION_RGB_FUNC_ADD);
 		OUT_RING  (chan, sblend);
 		OUT_RING  (chan, dblend);
-		OUT_RING  (chan, NVC0TCL_BLEND_EQUATION_ALPHA_FUNC_ADD);
+		OUT_RING  (chan, NVC0_3D_BLEND_EQUATION_ALPHA_FUNC_ADD);
 		OUT_RING  (chan, sblend);
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_BLEND_FUNC_DST_ALPHA, 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_BLEND_FUNC_DST_ALPHA, 1);
 		OUT_RING  (chan, dblend);
 	}
 }
@@ -1043,7 +1043,7 @@ NVC0EXAPrepareComposite(int op,
 	NVC0EXABlend(pdpix, pdpict, op, pmpict && pmpict->componentAlpha &&
 		     PICT_FORMAT_RGB(pmpict->format));
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_CODE_ADDRESS_HIGH, 2);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_CODE_ADDRESS_HIGH, 2);
 	if (OUT_RELOCh(chan, pNv->tesla_scratch, CODE_OFFSET, shd_flags) ||
 	    OUT_RELOCl(chan, pNv->tesla_scratch, CODE_OFFSET, shd_flags)) {
 		MARK_UNDO(chan);
@@ -1054,8 +1054,8 @@ NVC0EXAPrepareComposite(int op,
 		MARK_UNDO(chan);
 		NOUVEAU_FALLBACK("src picture invalid\n");
 	}
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_BIND_TIC(4), 1);
-	OUT_RING  (chan, (0 << 9) | (0 << 1) | NVC0TCL_BIND_TIC_ACTIVE);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_BIND_TIC(4), 1);
+	OUT_RING  (chan, (0 << 9) | (0 << 1) | NVC0_3D_BIND_TIC_ACTIVE);
 
 	if (pmpict) {
 		if (!NVC0EXATexture(pmpix, pmpict, 1)) {
@@ -1064,10 +1064,10 @@ NVC0EXAPrepareComposite(int op,
 		}
 		state->have_mask = TRUE;
 
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_BIND_TIC(4), 1);
-		OUT_RING  (chan, (1 << 9) | (1 << 1) | NVC0TCL_BIND_TIC_ACTIVE);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_BIND_TIC(4), 1);
+		OUT_RING  (chan, (1 << 9) | (1 << 1) | NVC0_3D_BIND_TIC_ACTIVE);
 
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_SP_START_ID(5), 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_SP_START_ID(5), 1);
 		if (pdpict->format == PICT_a8) {
 			OUT_RING  (chan, PFP_C_A8);
 		} else {
@@ -1084,21 +1084,21 @@ NVC0EXAPrepareComposite(int op,
 	} else {
 		state->have_mask = FALSE;
 
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_BIND_TIC(4), 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_BIND_TIC(4), 1);
 		OUT_RING  (chan, (1 << 1) | 0);
 
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_SP_START_ID(5), 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_SP_START_ID(5), 1);
 		if (pdpict->format == PICT_a8)
 			OUT_RING  (chan, PFP_S_A8);
 		else
 			OUT_RING  (chan, PFP_S);
 	}
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TSC_FLUSH, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TSC_FLUSH, 1);
 	OUT_RING  (chan, 0);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TIC_FLUSH, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TIC_FLUSH, 1);
 	OUT_RING  (chan, 0);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TEX_CACHE_CTL, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TEX_CACHE_CTL, 1);
 	OUT_RING  (chan, 0);
 
 	pNv->alu = op;
@@ -1143,11 +1143,11 @@ NVC0EXAComposite(PixmapPtr pdpix,
 	float sX0, sX1, sX2, sY0, sY1, sY2;
 
 	WAIT_RING (chan, 64);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_SCISSOR_HORIZ(0), 2);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_SCISSOR_HORIZ(0), 2);
 	OUT_RING  (chan, ((dx + w) << 16) | dx);
 	OUT_RING  (chan, ((dy + h) << 16) | dy);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VERTEX_BEGIN, 1);
-	OUT_RING  (chan, NVC0TCL_VERTEX_BEGIN_MODE_TRIANGLES);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VERTEX_BEGIN_GL, 1);
+	OUT_RING  (chan, NVC0_3D_VERTEX_BEGIN_GL_PRIMITIVE_TRIANGLES);
 
 	NVC0EXATransform(state->unit[0].transform, sx, sy + (h * 2),
 			 state->unit[0].width, state->unit[0].height,
@@ -1181,7 +1181,7 @@ NVC0EXAComposite(PixmapPtr pdpix,
 		VTX1s(pNv, sX2, sY2, dx + (w * 2), dy);
 	}
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_VERTEX_END, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_VERTEX_END_GL, 1);
 	OUT_RING  (chan, 0);
 }
 

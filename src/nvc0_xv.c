@@ -121,7 +121,7 @@ nvc0_xv_state_emit(PixmapPtr ppix, int id, struct nouveau_bo *src,
 	if (MARK_RING(chan, 256, 18))
 		return FALSE;
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_RT_ADDRESS_HIGH(0), 8);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_RT_ADDRESS_HIGH(0), 8);
 	if (OUT_RELOCh(chan, bo, 0, NOUVEAU_BO_VRAM | NOUVEAU_BO_WR) ||
 	    OUT_RELOCl(chan, bo, 0, NOUVEAU_BO_VRAM | NOUVEAU_BO_WR)) {
 		MARK_UNDO(chan);
@@ -130,19 +130,19 @@ nvc0_xv_state_emit(PixmapPtr ppix, int id, struct nouveau_bo *src,
 	OUT_RING  (chan, ppix->drawable.width);
 	OUT_RING  (chan, ppix->drawable.height);
 	switch (ppix->drawable.bitsPerPixel) {
-	case 32: OUT_RING  (chan, NVC0TCL_RT_FORMAT_A8R8G8B8_UNORM); break;
-	case 24: OUT_RING  (chan, NVC0TCL_RT_FORMAT_X8R8G8B8_UNORM); break;
-	case 16: OUT_RING  (chan, NVC0TCL_RT_FORMAT_R5G6B5_UNORM); break;
-	case 15: OUT_RING  (chan, NVC0TCL_RT_FORMAT_X1R5G5B5_UNORM); break;
+	case 32: OUT_RING  (chan, NV50_SURFACE_FORMAT_A8R8G8B8_UNORM); break;
+	case 24: OUT_RING  (chan, NV50_SURFACE_FORMAT_X8R8G8B8_UNORM); break;
+	case 16: OUT_RING  (chan, NV50_SURFACE_FORMAT_R5G6B5_UNORM); break;
+	case 15: OUT_RING  (chan, NV50_SURFACE_FORMAT_X1R5G5B5_UNORM); break;
 	}
 	OUT_RING  (chan, bo->tile_mode);
 	OUT_RING  (chan, 1);
 	OUT_RING  (chan, 0);
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_BLEND_ENABLE(0), 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_BLEND_ENABLE(0), 1);
 	OUT_RING  (chan, 0);
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TIC_ADDRESS_HIGH, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TIC_ADDRESS_HIGH, 3);
 	if (OUT_RELOCh(chan, pNv->tesla_scratch, TIC_OFFSET, tcb_flags) ||
 	    OUT_RELOCl(chan, pNv->tesla_scratch, TIC_OFFSET, tcb_flags)) {
 		MARK_UNDO(chan);
@@ -246,7 +246,7 @@ nvc0_xv_state_emit(PixmapPtr ppix, int id, struct nouveau_bo *src,
 	OUT_RING  (chan, 0x00000000);
 	}
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TSC_ADDRESS_HIGH, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TSC_ADDRESS_HIGH, 3);
 	if (OUT_RELOCh(chan, pNv->tesla_scratch, TSC_OFFSET, tcb_flags) ||
 	    OUT_RELOCl(chan, pNv->tesla_scratch, TSC_OFFSET, tcb_flags)) {
 		MARK_UNDO(chan);
@@ -291,26 +291,26 @@ nvc0_xv_state_emit(PixmapPtr ppix, int id, struct nouveau_bo *src,
 	OUT_RING  (chan, 0x00000000);
 	OUT_RING  (chan, 0x00000000);
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_CODE_ADDRESS_HIGH, 2);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_CODE_ADDRESS_HIGH, 2);
 	if (OUT_RELOCh(chan, pNv->tesla_scratch, CODE_OFFSET, shd_flags) ||
 	    OUT_RELOCl(chan, pNv->tesla_scratch, CODE_OFFSET, shd_flags)) {
 		MARK_UNDO(chan);
 		return FALSE;
 
 	}
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_SP_START_ID(5), 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_SP_START_ID(5), 1);
 	OUT_RING  (chan, PFP_NV12);
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TSC_FLUSH, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TSC_FLUSH, 1);
 	OUT_RING  (chan, 0);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TIC_FLUSH, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TIC_FLUSH, 1);
 	OUT_RING  (chan, 0);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_TEX_CACHE_CTL, 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_TEX_CACHE_CTL, 1);
 	OUT_RING  (chan, 0);
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_BIND_TIC(2), 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_BIND_TIC(2), 1);
 	OUT_RING  (chan, 1);
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_BIND_TIC(2), 1);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_BIND_TIC(2), 1);
 	OUT_RING  (chan, 0x203);
 
 	return TRUE;
@@ -371,20 +371,16 @@ nvc0_xv_image_put(ScrnInfoPtr pScrn,
 				return BadAlloc;
 		}
 
-		/* NVC0TCL_SCISSOR_VERT_T_SHIFT is wrong, because it was deducted with
-		* origin lying at the bottom left. This will be changed to _MIN_ and _MAX_
-		* later, because it is origin dependent.
-		*/
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_SCISSOR_HORIZ(0), 2);
-		OUT_RING  (chan, sx2 << NVC0TCL_SCISSOR_HORIZ_MAX_SHIFT | sx1);
-		OUT_RING  (chan, sy2 << NVC0TCL_SCISSOR_VERT_MAX_SHIFT | sy1 );
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_SCISSOR_HORIZ(0), 2);
+		OUT_RING  (chan, sx2 << NVC0_3D_SCISSOR_HORIZ_MAX__SHIFT | sx1);
+		OUT_RING  (chan, sy2 << NVC0_3D_SCISSOR_VERT_MAX__SHIFT | sy1 );
 
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_VERTEX_BEGIN, 1);
-		OUT_RING  (chan, NVC0TCL_VERTEX_BEGIN_MODE_TRIANGLES);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_VERTEX_BEGIN_GL, 1);
+		OUT_RING  (chan, NVC0_3D_VERTEX_BEGIN_GL_PRIMITIVE_TRIANGLES);
 		VTX2s(pNv, tx1, ty1, tx1, ty1, sx1, sy1);
 		VTX2s(pNv, tx2+(tx2-tx1), ty1, tx2+(tx2-tx1), ty1, sx2+(sx2-sx1), sy1);
 		VTX2s(pNv, tx1, ty2+(ty2-ty1), tx1, ty2+(ty2-ty1), sx1, sy2+(sy2-sy1));
-		BEGIN_RING(chan, NvSub3D, NVC0TCL_VERTEX_END, 1);
+		BEGIN_RING(chan, NvSub3D, NVC0_3D_VERTEX_END_GL, 1);
 		OUT_RING  (chan, 0);
 
 		pbox++;
@@ -403,14 +399,14 @@ nvc0_xv_csc_update(NVPtr pNv, float yco, float *off, float *uco, float *vco)
 	if (MARK_RING(chan, 64, 2))
 		return;
 
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_CB_SIZE, 3);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_CB_SIZE, 3);
 	OUT_RING  (chan, 256);
 	if (OUT_RELOCh(chan, bo, CB_OFFSET, NOUVEAU_BO_VRAM | NOUVEAU_BO_WR) ||
 	    OUT_RELOCl(chan, bo, CB_OFFSET, NOUVEAU_BO_VRAM | NOUVEAU_BO_WR)) {
 		MARK_UNDO(chan);
 		return;
 	}
-	BEGIN_RING(chan, NvSub3D, NVC0TCL_CB_POS, 11);
+	BEGIN_RING(chan, NvSub3D, NVC0_3D_CB_POS, 11);
 	OUT_RING  (chan, 0);
 	OUT_RINGf (chan, yco);
 	OUT_RINGf (chan, off[0]);
