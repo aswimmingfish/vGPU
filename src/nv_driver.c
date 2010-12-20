@@ -24,6 +24,8 @@
 
 #include "nv_include.h"
 
+#include "nouveau_pushbuf.h"
+
 #include "xorg-server.h"
 #include "xf86int10.h"
 #include "xf86drm.h"
@@ -357,8 +359,6 @@ NVLeaveVT(int scrnIndex, int flags)
 	int ret;
 
 	xf86DrvMsg(pScrn->scrnIndex, X_INFO, "NVLeaveVT is called.\n");
-
-	NVSync(pScrn);
 
 	ret = drmDropMaster(nouveau_device(pNv->dev)->fd);
 	if (ret)
