@@ -79,6 +79,9 @@ XORG_DRIVER_CHECK_EXT(XV, videoproto)
 XORG_DRIVER_CHECK_EXT(DPMSExtension, xextproto)
 XORG_DRIVER_CHECK_EXT(DRI2, [dri2proto >= 2.6])
 
+XORG_DRIVER_CHECK_EXT(DRI3, dri3proto)
+AM_CONDITIONAL(DRI3, [ test "$_EXT_CHECK" != "no" ] )
+
 # Checks for pkg-config packages
 PKG_CHECK_MODULES(LIBDRM, [libdrm >= 2.4.17])
 PKG_CHECK_MODULES(LIBDRM_NOUVEAU, [libdrm_nouveau >= 2.4.25])

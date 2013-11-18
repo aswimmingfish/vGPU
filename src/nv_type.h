@@ -108,6 +108,9 @@ typedef struct _NVRec {
 	struct nouveau_pushbuf *ce_pushbuf;
 	struct nouveau_object *NvCopy;
 
+	/* SYNC extension private */
+	void *sync;
+
 	/* Acceleration context */
 	PixmapPtr pspix, pmpix, pdpix;
 	PicturePtr pspict, pmpict;

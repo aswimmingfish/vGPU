@@ -29,7 +29,11 @@ nouveau_drv_la_LDFLAGS = -module -avoid-version @LIBDRM_NOUVEAU_LIBS@ \
 			 @LIBUDEV_LIBS@ @LIBDRM_LIBS@
 nouveau_drv_ladir = @moduledir@/drivers
 
-nouveau_drv_la_SOURCES = \
+if DRI3
+NOUVEAU_DRI3_SOURCES = nouveau_sync.c
+endif
+
+nouveau_drv_la_SOURCES = $(NOUVEAU_DRI3_SOURCES) \
 			 nouveau_exa.c nouveau_xv.c nouveau_dri2.c \
 			 nouveau_wfb.c \
 			 nv_accel_common.c \
@@ -116,6 +120,7 @@ EXTRA_DIST = hwdefs/nv_3ddefs.xml.h \
 	     shader/xfrm2nvf0.vpc \
 	     shader/Makefile \
 	     nouveau_local.h \
+	     nouveau_sync.h \
 	     nv_const.h \
 	     nv_dma.h \
 	     nv_include.h \

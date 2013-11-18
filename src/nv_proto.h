@@ -30,6 +30,15 @@ Bool nouveau_allocate_surface(ScrnInfoPtr scrn, int width, int height,
 			      int bpp, int usage_hint, int *pitch,
 			      struct nouveau_bo **bo);
 
+/* in nouveau_sync.c */
+#ifdef DRI3
+Bool nouveau_sync_init(ScreenPtr pScreen);
+void nouveau_sync_fini(ScreenPtr pScreen);
+#else
+static inline Bool nouveau_sync_init(ScreenPtr pScreen) { return FALSE; }
+static inline void nouveau_sync_fini(ScreenPtr pScreen) { }
+#endif
+
 /* in nouveau_dri2.c */
 Bool nouveau_dri2_init(ScreenPtr pScreen);
 void nouveau_dri2_fini(ScreenPtr pScreen);
